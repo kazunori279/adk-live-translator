@@ -39,9 +39,12 @@
           <option value="ar">Arabic</option>
         </select>
       </div>
-      <div class="connection-status">
-        <span class="status-indicator" id="statusIndicator"></span>
-        <span id="statusText">Connecting...</span>
+      <div class="header-controls">
+        <button id="toggleConsole" class="toggle-console-btn">Console</button>
+        <div class="connection-status">
+          <span class="status-indicator" id="statusIndicator"></span>
+          <span id="statusText">Connecting...</span>
+        </div>
       </div>
     </header>
 
@@ -56,7 +59,7 @@
         </div>
       </div>
 
-      <div class="console-panel">
+      <div class="console-panel hidden" id="consolePanel">
         <div class="console-header">
           <h2>Event Console</h2>
           <div class="console-controls">

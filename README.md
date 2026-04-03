@@ -2,6 +2,8 @@
 
 Real-time audio translation app powered by ADK Gemini Live API. Speak in any language and get immediate Japanese audio translation.
 
+![Demo](demo.gif)
+
 ## Setup
 
 ```bash

@@ -79,10 +79,36 @@ h1 {
   opacity: 0.8;
 }
 
-.connection-status {
+.header-controls {
   position: absolute;
   top: 1.5rem;
   right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.toggle-console-btn {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-console-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.toggle-console-btn.active {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.connection-status {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -333,6 +359,10 @@ button {
 }
 
 /* Console Panel */
+.console-panel.hidden {
+  display: none;
+}
+
 .console-panel {
   flex: 1;
   display: flex;

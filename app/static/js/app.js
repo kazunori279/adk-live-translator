@@ -139,6 +139,13 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
 
 clearConsoleBtn.addEventListener('click', () => { consoleContent.innerHTML = ''; });
 
+const toggleConsoleBtn = document.getElementById("toggleConsole");
+const consolePanel = document.getElementById("consolePanel");
+toggleConsoleBtn.addEventListener('click', () => {
+  consolePanel.classList.toggle('hidden');
+  toggleConsoleBtn.classList.toggle('active');
+});
+
 function updateConnectionStatus(connected) {
   if (connected) {
     statusIndicator.classList.remove("disconnected");
