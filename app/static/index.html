@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Translator</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/app.js" type="module"></script>
+  </head>
+
+  <body>
+    <header>
+      <h1>Live Translator</h1>
+      <div class="subtitle">Real-time audio translation powered by ADK Gemini Live API</div>
+      <div class="language-selector">
+        <select id="sourceLang">
+          <option value="en">English</option>
+          <option value="ja">Japanese</option>
+          <option value="zh">Chinese</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="pt">Portuguese</option>
+          <option value="ko">Korean</option>
+          <option value="hi">Hindi</option>
+          <option value="ar">Arabic</option>
+        </select>
+        <span class="lang-arrow">→</span>
+        <select id="targetLang">
+          <option value="ja">Japanese</option>
+          <option value="en">English</option>
+          <option value="zh">Chinese</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="pt">Portuguese</option>
+          <option value="ko">Korean</option>
+          <option value="hi">Hindi</option>
+          <option value="ar">Arabic</option>
+        </select>
+      </div>
+      <div class="connection-status">
+        <span class="status-indicator" id="statusIndicator"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <div class="container">
+        <div id="messages"></div>
+
+        <div class="input-container">
+          <div class="input-wrapper">
+            <button type="button" id="startAudioButton">Start Audio</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="console-panel">
+        <div class="console-header">
+          <h2>Event Console</h2>
+          <div class="console-controls">
+            <label class="console-checkbox">
+              <input type="checkbox" id="showAudioEvents">
+              <span>Show audio</span>
+            </label>
+            <button id="clearConsole" class="console-clear-btn">Clear</button>
+          </div>
+        </div>
+        <div id="consoleContent" class="console-content"></div>
+      </div>
+    </div>
+  </body>
+</html>
