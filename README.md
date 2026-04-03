@@ -25,6 +25,16 @@ GOOGLE_API_KEY=your-api-key
 ```
 
 
+## Custom Glossary
+
+You can provide a custom glossary in `app/dict.csv` to ensure specific terms are always translated consistently. Each line is a comma-separated pair of source and target terms:
+
+```csv
+Kubernetes,クバネティス
+Cloud Run,クラウドラン
+Gemini,ジェミニ
+```
+
 ## Run
 
 ```bash
