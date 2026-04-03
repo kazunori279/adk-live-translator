@@ -14,6 +14,90 @@ let is_audio = false;
 const sourceLangSelect = document.getElementById("sourceLang");
 const targetLangSelect = document.getElementById("targetLang");
 
+// Custom dropdown logic
+function setupCustomSelect(hiddenInput, trigger, dropdown, defaultCode, languages, popular, allCodes) {
+  dropdown.innerHTML = "";
+
+  function addOption(code) {
+    const div = document.createElement("div");
+    div.className = "custom-select-option";
+    if (code === defaultCode) div.classList.add("selected");
+    div.textContent = languages[code];
+    div.dataset.value = code;
+    div.addEventListener("click", () => {
+      hiddenInput.value = code;
+      trigger.textContent = languages[code];
+      dropdown.querySelectorAll(".custom-select-option").forEach(o => o.classList.remove("selected"));
+      div.classList.add("selected");
+      dropdown.classList.remove("open");
+      reconnectWithNewLanguage();
+    });
+    dropdown.appendChild(div);
+  }
+
+  for (const code of popular) addOption(code);
+  const divider = document.createElement("div");
+  divider.className = "custom-select-divider";
+  dropdown.appendChild(divider);
+  for (const code of allCodes) addOption(code);
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    // Close other dropdowns
+    document.querySelectorAll(".custom-select-dropdown.open").forEach(d => {
+      if (d !== dropdown) d.classList.remove("open");
+    });
+    dropdown.classList.toggle("open");
+    // Scroll to selected item
+    const selected = dropdown.querySelector(".selected");
+    if (selected) selected.scrollIntoView({ block: "center" });
+  });
+}
+
+// Swap languages
+document.getElementById("swapLangs").addEventListener("click", () => {
+  const srcVal = sourceLangSelect.value;
+  const tgtVal = targetLangSelect.value;
+  const srcTrigger = document.getElementById("sourceLangTrigger");
+  const tgtTrigger = document.getElementById("targetLangTrigger");
+  const srcText = srcTrigger.textContent;
+  const tgtText = tgtTrigger.textContent;
+  sourceLangSelect.value = tgtVal;
+  targetLangSelect.value = srcVal;
+  srcTrigger.textContent = tgtText;
+  tgtTrigger.textContent = srcText;
+  // Update selected states in dropdowns
+  document.getElementById("sourceLangDropdown").querySelectorAll(".custom-select-option").forEach(o => {
+    o.classList.toggle("selected", o.dataset.value === tgtVal);
+  });
+  document.getElementById("targetLangDropdown").querySelectorAll(".custom-select-option").forEach(o => {
+    o.classList.toggle("selected", o.dataset.value === srcVal);
+  });
+  reconnectWithNewLanguage();
+});
+
+// Close dropdowns on outside click
+document.addEventListener("click", () => {
+  document.querySelectorAll(".custom-select-dropdown.open").forEach(d => d.classList.remove("open"));
+});
+
+// Populate language selectors from API
+async function loadLanguages() {
+  const resp = await fetch("/api/languages");
+  const { languages, popular } = await resp.json();
+  const allCodes = Object.keys(languages).sort((a, b) => languages[a].localeCompare(languages[b]));
+
+  setupCustomSelect(
+    sourceLangSelect, document.getElementById("sourceLangTrigger"),
+    document.getElementById("sourceLangDropdown"), "en", languages, popular, allCodes
+  );
+  setupCustomSelect(
+    targetLangSelect, document.getElementById("targetLangTrigger"),
+    document.getElementById("targetLangDropdown"), "ja", languages, popular, allCodes
+  );
+}
+loadLanguages();
+
 function getWebSocketUrl() {
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const source = sourceLangSelect.value;
@@ -464,12 +548,11 @@ function reconnectWithNewLanguage() {
     websocket.close();
   }
   messagesDiv.innerHTML = '';
-  addSystemMessage(`Language changed: ${sourceLangSelect.options[sourceLangSelect.selectedIndex].text} → ${targetLangSelect.options[targetLangSelect.selectedIndex].text}`);
+  const srcName = document.getElementById("sourceLangTrigger").textContent;
+  const tgtName = document.getElementById("targetLangTrigger").textContent;
+  addSystemMessage(`Language changed: ${srcName} → ${tgtName}`);
   connectWebsocket();
 }
-
-sourceLangSelect.addEventListener("change", reconnectWithNewLanguage);
-targetLangSelect.addEventListener("change", reconnectWithNewLanguage);
 
 function base64ToArray(base64) {
   let standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');

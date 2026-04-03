@@ -1,8 +1,8 @@
-# Live Translator
+# ADK Live Translator
 
-Real-time audio translation app powered by ADK Gemini Live API. Speak in any language and get immediate audio translation in your chosen target language.
+Real-time audio translation app powered by ADK Gemini Live API Toolkit. Speak in any language and get immediate audio translation in your chosen target language.
 
-Supported languages: English, Japanese, Chinese, Spanish, French, German, Portuguese, Korean, Hindi, and Arabic.
+Supports 97 languages including English, Japanese, Chinese, Spanish, French, German, Portuguese, Korean, Hindi, Arabic, and many more.
 
 ![Demo](demo.gif)
 

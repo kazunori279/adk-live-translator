@@ -3,41 +3,27 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Translator</title>
+    <title>ADK Live Translator</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="/static/js/app.js" type="module"></script>
   </head>
 
   <body>
     <header>
-      <h1>Live Translator</h1>
-      <div class="subtitle">Real-time audio translation powered by ADK Gemini Live API</div>
+      <h1>ADK Live Translator</h1>
+      <div class="subtitle">Real-time audio translation in 97 languages, powered by ADK Gemini Live API Toolkit</div>
       <div class="language-selector">
-        <select id="sourceLang">
-          <option value="en">English</option>
-          <option value="ja">Japanese</option>
-          <option value="zh">Chinese</option>
-          <option value="es">Spanish</option>
-          <option value="fr">French</option>
-          <option value="de">German</option>
-          <option value="pt">Portuguese</option>
-          <option value="ko">Korean</option>
-          <option value="hi">Hindi</option>
-          <option value="ar">Arabic</option>
-        </select>
-        <span class="lang-arrow">→</span>
-        <select id="targetLang">
-          <option value="ja">Japanese</option>
-          <option value="en">English</option>
-          <option value="zh">Chinese</option>
-          <option value="es">Spanish</option>
-          <option value="fr">French</option>
-          <option value="de">German</option>
-          <option value="pt">Portuguese</option>
-          <option value="ko">Korean</option>
-          <option value="hi">Hindi</option>
-          <option value="ar">Arabic</option>
-        </select>
+        <div class="custom-select" id="sourceLangWrapper">
+          <button class="custom-select-trigger" id="sourceLangTrigger">English</button>
+          <div class="custom-select-dropdown" id="sourceLangDropdown"></div>
+          <input type="hidden" id="sourceLang" value="en">
+        </div>
+        <button class="lang-swap-btn" id="swapLangs" title="Swap languages">⇄</button>
+        <div class="custom-select" id="targetLangWrapper">
+          <button class="custom-select-trigger" id="targetLangTrigger">Japanese (日本語)</button>
+          <div class="custom-select-dropdown" id="targetLangDropdown"></div>
+          <input type="hidden" id="targetLang" value="ja">
+        </div>
       </div>
       <div class="header-controls">
         <button id="toggleConsole" class="toggle-console-btn">Console</button>

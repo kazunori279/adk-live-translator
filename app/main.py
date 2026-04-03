@@ -37,7 +37,7 @@ Gemini._live_api_version = "v1beta"
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
-from translator_agent.agent import agent, create_agent, LANGUAGES  # noqa: E402
+from translator_agent.agent import agent, create_agent, LANGUAGES, POPULAR_LANGUAGES  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -72,8 +72,8 @@ async def root():
 
 @app.get("/api/languages")
 async def get_languages():
-    """Return available languages."""
-    return LANGUAGES
+    """Return available languages with popular ones highlighted."""
+    return {"languages": LANGUAGES, "popular": POPULAR_LANGUAGES}
 
 
 @app.websocket("/ws/{user_id}/{session_id}")

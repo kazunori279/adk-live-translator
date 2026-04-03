@@ -59,24 +59,96 @@ h1 {
   margin-top: 0.5rem;
 }
 
-.language-selector select {
-  padding: 0.3rem 0.5rem;
+.custom-select {
+  position: relative;
+}
+
+.custom-select-trigger {
+  padding: 0.4rem 1.5rem 0.4rem 0.6rem;
   border: none;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.2);
   color: white;
-  font-size: 0.875rem;
+  font-size: 1rem;
   cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  appearance: none;
 }
 
-.language-selector select option {
-  background: #333;
+.custom-select-trigger::after {
+  content: '▾';
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+
+.custom-select-trigger:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.custom-select-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 260px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: #2d2d2d;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  margin-top: 4px;
+}
+
+.custom-select-dropdown.open {
+  display: block;
+}
+
+.custom-select-option {
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  color: #e0e0e0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.custom-select-option:hover {
+  background: rgba(66, 133, 244, 0.3);
   color: white;
 }
 
-.lang-arrow {
-  font-size: 1rem;
-  opacity: 0.8;
+.custom-select-option.selected {
+  background: rgba(66, 133, 244, 0.2);
+  color: #8ab4f8;
+}
+
+.custom-select-divider {
+  border-top: 1px solid #4e4e4e;
+  margin: 0.25rem 0;
+}
+
+.custom-select-dropdown::-webkit-scrollbar { width: 8px; }
+.custom-select-dropdown::-webkit-scrollbar-track { background: #2d2d2d; }
+.custom-select-dropdown::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+
+.lang-swap-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-size: 1.1rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lang-swap-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .header-controls {
