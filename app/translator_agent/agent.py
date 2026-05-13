@@ -142,8 +142,10 @@ def _glossary_section(entries: list[GlossaryEntry]) -> str:
         return ""
     lines = "\n".join(f"- {src} → {tgt}" for src, tgt, _ in entries)
     return (
-        "\n\nUse the following glossary for specific terms. "
-        "When you hear these words, always use the paired translation:\n"
+        "\n\nUse the following glossary for specific terms. Match the source "
+        "term case-insensitively (e.g. \"kubernetes\", \"Kubernetes\", and "
+        "\"KUBERNETES\" all match a \"Kubernetes\" entry). When you hear any "
+        "of these terms, always use the paired translation:\n"
         + lines
     )
 
