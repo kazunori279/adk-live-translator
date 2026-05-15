@@ -167,6 +167,7 @@ TEST_GLOSSARY: list[dict[str, str]] = [
 class IterationResult:
     index: int
     original: str
+    input_transcription: str | None = None
     output_transcription: str | None = None
     stt_transcription: str | None = None
     passed: bool = False
@@ -177,6 +178,8 @@ class IterationResult:
     first_response_sec: float | None = None
     glossary_term: str | None = None
     glossary_found: bool | None = None
+    input_transcription_score: float | None = None
+    output_transcription_score: float | None = None
 
 
 @dataclass
@@ -190,6 +193,8 @@ class Stats:
     latency_slow: int = 0
     glossary_checked: int = 0
     glossary_found: int = 0
+    input_transcription_scores: list[float] = field(default_factory=list)
+    output_transcription_scores: list[float] = field(default_factory=list)
     results: list[IterationResult] = field(default_factory=list)
 
 
@@ -291,6 +296,30 @@ def verify_translation(
     return passed, score, reason
 
 
+def score_transcription(
+    client: genai.Client,
+    reference: str,
+    transcription: str,
+    label: str,
+) -> float:
+    resp = client.models.generate_content(
+        model=GENAI_MODEL,
+        contents=(
+            f"Score how accurately the transcription matches the reference text. "
+            f"Ignore minor punctuation or formatting differences. Focus on whether "
+            f"the words and meaning are captured correctly.\n\n"
+            f"Reference: {reference}\n"
+            f"Transcription: {transcription}\n\n"
+            f"Score from 0 to 10 (10 = perfect match). "
+            f"Reply with ONLY a number, nothing else."
+        ),
+    )
+    try:
+        return float(resp.text.strip().split("/")[0])
+    except ValueError:
+        return 0.0
+
+
 LANG_TO_STT = {
     "ja": "ja-JP",
     "en": "en-US",
@@ -329,6 +358,8 @@ async def run_iteration(
     except Exception as e:
         return IterationResult(index=index, original=sentence, error=f"tts: {e}")
 
+    input_transcription_final: list[str] = []
+    input_transcription_partial: list[str] = []
     output_transcription_final: list[str] = []
     output_transcription_partial: list[str] = []
     audio_chunks: list[bytes] = []
@@ -343,6 +374,13 @@ async def run_iteration(
                 msg = json.loads(raw)
 
                 has_content = False
+                it = msg.get("inputTranscription")
+                if it and it.get("text"):
+                    if it.get("finished"):
+                        input_transcription_final.append(it["text"])
+                    else:
+                        input_transcription_partial.append(it["text"])
+
                 ot = msg.get("outputTranscription")
                 if ot and ot.get("text"):
                     has_content = True
@@ -414,6 +452,11 @@ async def run_iteration(
         if first_resp_sec < 0:
             first_resp_sec = first_response_at[0] - t0
 
+    input_text = (
+        input_transcription_final[-1]
+        if input_transcription_final
+        else "".join(input_transcription_partial) or None
+    )
     output_text = (
         output_transcription_final[-1]
         if output_transcription_final
@@ -430,6 +473,26 @@ async def run_iteration(
         except Exception as e:
             stt_text = f"(stt error: {e})"
 
+    # Transcription quality: input transcription vs known original
+    input_tx_score = None
+    if input_text:
+        try:
+            input_tx_score = score_transcription(
+                genai_client, sentence, input_text, "input"
+            )
+        except Exception:
+            pass
+
+    # Transcription quality: output transcription vs independent STT
+    output_tx_score = None
+    if output_text and stt_text and not stt_text.startswith("(stt error"):
+        try:
+            output_tx_score = score_transcription(
+                genai_client, stt_text, output_text, "output"
+            )
+        except Exception:
+            pass
+
     # Glossary check: verify the display transcription appears in output
     glossary_found = None
     if glossary_entry and output_text:
@@ -443,6 +506,7 @@ async def run_iteration(
         return IterationResult(
             index=index,
             original=sentence,
+            input_transcription=input_text,
             output_transcription=output_text,
             stt_transcription=stt_text,
             error="no response",
@@ -450,6 +514,8 @@ async def run_iteration(
             first_response_sec=first_resp_sec,
             glossary_term=glossary_term,
             glossary_found=glossary_found,
+            input_transcription_score=input_tx_score,
+            output_transcription_score=output_tx_score,
         )
 
     try:
@@ -460,6 +526,7 @@ async def run_iteration(
         return IterationResult(
             index=index,
             original=sentence,
+            input_transcription=input_text,
             output_transcription=output_text,
             stt_transcription=stt_text,
             error=f"verify: {e}",
@@ -467,11 +534,14 @@ async def run_iteration(
             first_response_sec=first_resp_sec,
             glossary_term=glossary_term,
             glossary_found=glossary_found,
+            input_transcription_score=input_tx_score,
+            output_transcription_score=output_tx_score,
         )
 
     return IterationResult(
         index=index,
         original=sentence,
+        input_transcription=input_text,
         output_transcription=output_text,
         stt_transcription=stt_text,
         passed=passed,
@@ -481,10 +551,12 @@ async def run_iteration(
         first_response_sec=first_resp_sec,
         glossary_term=glossary_term,
         glossary_found=glossary_found,
+        input_transcription_score=input_tx_score,
+        output_transcription_score=output_tx_score,
     )
 
 
-def _format_result_line(result: IterationResult) -> str:
+def _format_tags(result: IterationResult) -> tuple[str, str, str, str]:
     display = result.output_transcription or result.stt_transcription or ""
     if len(display) > 40:
         display = display[:37] + "..."
@@ -505,7 +577,16 @@ def _format_result_line(result: IterationResult) -> str:
         else:
             glossary_tag = f" [G:{result.glossary_term}:?]"
 
-    return latency_tag, glossary_tag, display
+    tx_tag = ""
+    parts = []
+    if result.input_transcription_score is not None:
+        parts.append(f"in={result.input_transcription_score:.0f}")
+    if result.output_transcription_score is not None:
+        parts.append(f"out={result.output_transcription_score:.0f}")
+    if parts:
+        tx_tag = f" [TX:{'/'.join(parts)}]"
+
+    return latency_tag, glossary_tag, tx_tag, display
 
 
 async def main():
@@ -566,12 +647,18 @@ async def main():
                 if result.glossary_found:
                     stats.glossary_found += 1
 
-            latency_tag, glossary_tag, display = _format_result_line(result)
+            # Transcription quality stats
+            if result.input_transcription_score is not None:
+                stats.input_transcription_scores.append(result.input_transcription_score)
+            if result.output_transcription_score is not None:
+                stats.output_transcription_scores.append(result.output_transcription_score)
+
+            latency_tag, glossary_tag, tx_tag, display = _format_tags(result)
 
             if result.error:
                 stats.errors += 1
                 print(
-                    f"[{stamp()}] #{result.index} ERROR ({result.elapsed:.1f}s){latency_tag}{glossary_tag} | "
+                    f"[{stamp()}] #{result.index} ERROR ({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "
                     f'"{result.original[:50]}" | {result.error}'
                 )
             elif result.passed:
@@ -579,14 +666,14 @@ async def main():
                 stats.total_score += result.score
                 print(
                     f"[{stamp()}] #{result.index} PASS ({result.score:.0f}/10) "
-                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag} | "{result.original[:50]}" -> "{display}"'
+                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "{result.original[:50]}" -> "{display}"'
                 )
             else:
                 stats.failed += 1
                 stats.total_score += result.score
                 print(
                     f"[{stamp()}] #{result.index} FAIL ({result.score:.0f}/10) "
-                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag} | "{result.original[:50]}" -> "{display}"'
+                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "{result.original[:50]}" -> "{display}"'
                     f" | {result.reason}"
                 )
 
@@ -621,6 +708,18 @@ async def main():
         print(
             f"Glossary: {stats.glossary_found}/{stats.glossary_checked} "
             f"({100 * stats.glossary_found / stats.glossary_checked:.1f}%) terms matched in output"
+        )
+    if stats.input_transcription_scores:
+        avg_in = sum(stats.input_transcription_scores) / len(stats.input_transcription_scores)
+        print(
+            f"Input transcription quality: {avg_in:.1f}/10 avg "
+            f"(n={len(stats.input_transcription_scores)})"
+        )
+    if stats.output_transcription_scores:
+        avg_out = sum(stats.output_transcription_scores) / len(stats.output_transcription_scores)
+        print(
+            f"Output transcription quality: {avg_out:.1f}/10 avg "
+            f"(n={len(stats.output_transcription_scores)})"
         )
 
     sys.exit(0 if stats.errors == 0 and stats.passed > 0 else 1)
