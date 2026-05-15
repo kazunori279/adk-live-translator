@@ -298,16 +298,19 @@ async def websocket_endpoint(
             async with client.aio.live.connect(model=MODEL, config=config) as session:
                 current_session = session
                 try:
+                    go_away_received = False
                     while True:
                         saw_message = False
                         async for msg in session.receive():
                             saw_message = True
                             if msg.go_away is not None:
                                 logger.info(
-                                    "GoAway received (time_left=%s); will reopen",
+                                    "GoAway received (time_left=%s); "
+                                    "will reopen after current turn",
                                     msg.go_away.time_left,
                                 )
-                                break
+                                go_away_received = True
+                                continue
                             update = msg.session_resumption_update
                             if update and update.resumable and update.new_handle:
                                 _resume_handle_put(session_id, update.new_handle)
@@ -324,9 +327,10 @@ async def websocket_endpoint(
                                     )
                                 ot["text"] = replaced
                             await websocket.send_text(json.dumps(envelope))
-                        if not saw_message:
+                        if not saw_message or go_away_received:
                             logger.debug(
-                                "Live session ended; reopening with stored handle"
+                                "Live session ended (go_away=%s); reopening",
+                                go_away_received,
                             )
                             break
                 finally:
