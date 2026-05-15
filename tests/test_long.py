@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.cloud import speech, texttospeech
 
-load_dotenv(Path(__file__).parent / "app" / ".env")
+load_dotenv(Path(__file__).parent.parent / "app" / ".env")
 
 os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
 os.environ.pop("GOOGLE_CLOUD_PROJECT", None)

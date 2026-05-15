@@ -134,7 +134,7 @@ Key flags:
 
 ### Soak Test
 
-`test_long.py` is a long-running automated test that validates translation quality, latency, glossary behavior, and session stability over extended periods (default 1 hour).
+`tests/test_long.py` is a long-running automated test that validates translation quality, latency, glossary behavior, and session stability over extended periods (default 1 hour).
 
 It generates random English sentences via Gemini Flash Lite, converts them to audio with Google Cloud TTS, streams them through the translator WebSocket, transcribes the returned audio with Google Cloud STT, and verifies semantic correctness.
 
@@ -142,10 +142,10 @@ It generates random English sentences via Gemini Flash Lite, converts them to au
 uv sync --extra test
 
 # 2-minute smoke test against local server
-uv run python test_long.py --duration 120
+uv run python tests/test_long.py --duration 120
 
 # 1-hour test against Cloud Run
-uv run python test_long.py --url wss://YOUR_CLOUD_RUN_URL --duration 3600
+uv run python tests/test_long.py --url wss://YOUR_CLOUD_RUN_URL --duration 3600
 ```
 
 Options:
