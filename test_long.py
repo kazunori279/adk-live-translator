@@ -56,6 +56,113 @@ TOPICS = [
 ]
 
 
+LATENCY_THRESHOLD = 5.0  # seconds — first response must arrive within this
+
+TEST_GLOSSARY: list[dict[str, str]] = [
+    {"source": "Kubernetes", "target": "クバネティス", "transcription": "Kubernetes"},
+    {"source": "Cloud Run", "target": "クラウドラン", "transcription": "Cloud Run"},
+    {"source": "Gemini", "target": "ジェミニ", "transcription": "Gemini"},
+    {"source": "Vertex AI", "target": "バーテックスエーアイ", "transcription": "Vertex AI"},
+    {"source": "TensorFlow", "target": "テンソルフロー", "transcription": "TensorFlow"},
+    {"source": "BigQuery", "target": "ビッグクエリ", "transcription": "BigQuery"},
+    {"source": "Firestore", "target": "ファイアストア", "transcription": "Firestore"},
+    {"source": "Cloud Spanner", "target": "クラウドスパナー", "transcription": "Cloud Spanner"},
+    {"source": "Pub/Sub", "target": "パブサブ", "transcription": "Pub/Sub"},
+    {"source": "Dataflow", "target": "データフロー", "transcription": "Dataflow"},
+    {"source": "Anthos", "target": "アンソス", "transcription": "Anthos"},
+    {"source": "Istio", "target": "イスティオ", "transcription": "Istio"},
+    {"source": "gRPC", "target": "ジーアールピーシー", "transcription": "gRPC"},
+    {"source": "Protocol Buffers", "target": "プロトコルバッファーズ", "transcription": "Protocol Buffers"},
+    {"source": "Docker", "target": "ドッカー", "transcription": "Docker"},
+    {"source": "Terraform", "target": "テラフォーム", "transcription": "Terraform"},
+    {"source": "Jenkins", "target": "ジェンキンズ", "transcription": "Jenkins"},
+    {"source": "GitHub Actions", "target": "ギットハブアクションズ", "transcription": "GitHub Actions"},
+    {"source": "Visual Studio Code", "target": "ビジュアルスタジオコード", "transcription": "VS Code"},
+    {"source": "IntelliJ", "target": "インテリジェイ", "transcription": "IntelliJ"},
+    {"source": "PostgreSQL", "target": "ポストグレスキューエル", "transcription": "PostgreSQL"},
+    {"source": "MongoDB", "target": "モンゴディービー", "transcription": "MongoDB"},
+    {"source": "Redis", "target": "レディス", "transcription": "Redis"},
+    {"source": "Elasticsearch", "target": "エラスティックサーチ", "transcription": "Elasticsearch"},
+    {"source": "Kafka", "target": "カフカ", "transcription": "Kafka"},
+    {"source": "RabbitMQ", "target": "ラビットエムキュー", "transcription": "RabbitMQ"},
+    {"source": "GraphQL", "target": "グラフキューエル", "transcription": "GraphQL"},
+    {"source": "REST API", "target": "レストエーピーアイ", "transcription": "REST API"},
+    {"source": "WebSocket", "target": "ウェブソケット", "transcription": "WebSocket"},
+    {"source": "OAuth", "target": "オーオース", "transcription": "OAuth"},
+    {"source": "JWT", "target": "ジェイダブリューティー", "transcription": "JWT"},
+    {"source": "SSL", "target": "エスエスエル", "transcription": "SSL"},
+    {"source": "DNS", "target": "ディーエヌエス", "transcription": "DNS"},
+    {"source": "CDN", "target": "シーディーエヌ", "transcription": "CDN"},
+    {"source": "load balancer", "target": "ロードバランサー", "transcription": "ロードバランサー"},
+    {"source": "microservices", "target": "マイクロサービス", "transcription": "マイクロサービス"},
+    {"source": "serverless", "target": "サーバーレス", "transcription": "サーバーレス"},
+    {"source": "CI/CD", "target": "シーアイシーディー", "transcription": "CI/CD"},
+    {"source": "DevOps", "target": "デブオプス", "transcription": "DevOps"},
+    {"source": "SRE", "target": "エスアールイー", "transcription": "SRE"},
+    {"source": "Agile", "target": "アジャイル", "transcription": "Agile"},
+    {"source": "Scrum", "target": "スクラム", "transcription": "Scrum"},
+    {"source": "Kanban", "target": "カンバン", "transcription": "Kanban"},
+    {"source": "sprint", "target": "スプリント", "transcription": "スプリント"},
+    {"source": "backlog", "target": "バックログ", "transcription": "バックログ"},
+    {"source": "React", "target": "リアクト", "transcription": "React"},
+    {"source": "Angular", "target": "アンギュラー", "transcription": "Angular"},
+    {"source": "Vue.js", "target": "ビュージェイエス", "transcription": "Vue.js"},
+    {"source": "Next.js", "target": "ネクストジェイエス", "transcription": "Next.js"},
+    {"source": "Node.js", "target": "ノードジェイエス", "transcription": "Node.js"},
+    {"source": "TypeScript", "target": "タイプスクリプト", "transcription": "TypeScript"},
+    {"source": "Python", "target": "パイソン", "transcription": "Python"},
+    {"source": "Golang", "target": "ゴーラング", "transcription": "Go"},
+    {"source": "Rust", "target": "ラスト", "transcription": "Rust"},
+    {"source": "Swift", "target": "スウィフト", "transcription": "Swift"},
+    {"source": "Kotlin", "target": "コトリン", "transcription": "Kotlin"},
+    {"source": "Flutter", "target": "フラッター", "transcription": "Flutter"},
+    {"source": "Dart", "target": "ダート", "transcription": "Dart"},
+    {"source": "machine learning", "target": "マシンラーニング", "transcription": "機械学習"},
+    {"source": "deep learning", "target": "ディープラーニング", "transcription": "深層学習"},
+    {"source": "neural network", "target": "ニューラルネットワーク", "transcription": "ニューラルネットワーク"},
+    {"source": "transformer", "target": "トランスフォーマー", "transcription": "Transformer"},
+    {"source": "fine-tuning", "target": "ファインチューニング", "transcription": "ファインチューニング"},
+    {"source": "embedding", "target": "エンベディング", "transcription": "エンベディング"},
+    {"source": "RAG", "target": "ラグ", "transcription": "RAG"},
+    {"source": "LLM", "target": "エルエルエム", "transcription": "LLM"},
+    {"source": "GPT", "target": "ジーピーティー", "transcription": "GPT"},
+    {"source": "Claude", "target": "クロード", "transcription": "Claude"},
+    {"source": "ChatGPT", "target": "チャットジーピーティー", "transcription": "ChatGPT"},
+    {"source": "Hugging Face", "target": "ハギングフェイス", "transcription": "Hugging Face"},
+    {"source": "PyTorch", "target": "パイトーチ", "transcription": "PyTorch"},
+    {"source": "JAX", "target": "ジャックス", "transcription": "JAX"},
+    {"source": "CUDA", "target": "クーダ", "transcription": "CUDA"},
+    {"source": "TPU", "target": "ティーピーユー", "transcription": "TPU"},
+    {"source": "GPU", "target": "ジーピーユー", "transcription": "GPU"},
+    {"source": "API gateway", "target": "エーピーアイゲートウェイ", "transcription": "APIゲートウェイ"},
+    {"source": "service mesh", "target": "サービスメッシュ", "transcription": "サービスメッシュ"},
+    {"source": "observability", "target": "オブザーバビリティ", "transcription": "オブザーバビリティ"},
+    {"source": "Prometheus", "target": "プロメテウス", "transcription": "Prometheus"},
+    {"source": "Grafana", "target": "グラファナ", "transcription": "Grafana"},
+    {"source": "OpenTelemetry", "target": "オープンテレメトリー", "transcription": "OpenTelemetry"},
+    {"source": "Helm", "target": "ヘルム", "transcription": "Helm"},
+    {"source": "Argo CD", "target": "アルゴシーディー", "transcription": "Argo CD"},
+    {"source": "Flux", "target": "フラックス", "transcription": "Flux"},
+    {"source": "GitOps", "target": "ギットオプス", "transcription": "GitOps"},
+    {"source": "infrastructure as code", "target": "インフラストラクチャーアズコード", "transcription": "IaC"},
+    {"source": "Pulumi", "target": "プルミ", "transcription": "Pulumi"},
+    {"source": "Ansible", "target": "アンシブル", "transcription": "Ansible"},
+    {"source": "Vault", "target": "ボルト", "transcription": "Vault"},
+    {"source": "Consul", "target": "コンサル", "transcription": "Consul"},
+    {"source": "Envoy", "target": "エンボイ", "transcription": "Envoy"},
+    {"source": "Nginx", "target": "エンジンエックス", "transcription": "Nginx"},
+    {"source": "Apache", "target": "アパッチ", "transcription": "Apache"},
+    {"source": "Linux", "target": "リナックス", "transcription": "Linux"},
+    {"source": "Ubuntu", "target": "ウブントゥ", "transcription": "Ubuntu"},
+    {"source": "Debian", "target": "デビアン", "transcription": "Debian"},
+    {"source": "Alpine", "target": "アルパイン", "transcription": "Alpine"},
+    {"source": "Bazel", "target": "バゼル", "transcription": "Bazel"},
+    {"source": "Webpack", "target": "ウェブパック", "transcription": "Webpack"},
+    {"source": "Vite", "target": "ヴィート", "transcription": "Vite"},
+    {"source": "ESLint", "target": "イーエスリント", "transcription": "ESLint"},
+]
+
+
 @dataclass
 class IterationResult:
     index: int
@@ -67,6 +174,9 @@ class IterationResult:
     reason: str = ""
     error: str | None = None
     elapsed: float = 0.0
+    first_response_sec: float | None = None
+    glossary_term: str | None = None
+    glossary_found: bool | None = None
 
 
 @dataclass
@@ -76,6 +186,10 @@ class Stats:
     failed: int = 0
     errors: int = 0
     total_score: float = 0.0
+    latency_ok: int = 0
+    latency_slow: int = 0
+    glossary_checked: int = 0
+    glossary_found: int = 0
     results: list[IterationResult] = field(default_factory=list)
 
 
@@ -83,14 +197,19 @@ def stamp() -> str:
     return time.strftime("%H:%M:%S")
 
 
-def generate_sentence(client: genai.Client, topic: str) -> str:
-    resp = client.models.generate_content(
-        model=GENAI_MODEL,
-        contents=(
+def generate_sentence(client: genai.Client, topic: str, glossary_term: str | None = None) -> str:
+    if glossary_term:
+        prompt = (
+            f"Generate exactly one natural English sentence (10-20 words) that "
+            f"uses the term \"{glossary_term}\" naturally. "
+            f"Output only the sentence, no quotes or explanation."
+        )
+    else:
+        prompt = (
             f"Generate exactly one natural English sentence (10-20 words) about "
             f"{topic}. Output only the sentence, no quotes or explanation."
-        ),
-    )
+        )
+    resp = client.models.generate_content(model=GENAI_MODEL, contents=prompt)
     return resp.text.strip().strip('"')
 
 
@@ -194,12 +313,14 @@ async def run_iteration(
     index: int,
     source: str,
     target: str,
+    glossary_entry: dict[str, str] | None = None,
 ) -> IterationResult:
     topic = TOPICS[index % len(TOPICS)]
+    glossary_term = glossary_entry["source"] if glossary_entry else None
     t0 = time.monotonic()
 
     try:
-        sentence = generate_sentence(genai_client, topic)
+        sentence = generate_sentence(genai_client, topic, glossary_term)
     except Exception as e:
         return IterationResult(index=index, original="", error=f"generate: {e}")
 
@@ -212,6 +333,8 @@ async def run_iteration(
     output_transcription_partial: list[str] = []
     audio_chunks: list[bytes] = []
     turn_complete = asyncio.Event()
+    first_response_at: list[float] = []
+    send_done_at: list[float] = []
 
     async def receive_responses():
         try:
@@ -219,8 +342,10 @@ async def run_iteration(
                 raw = await asyncio.wait_for(ws.recv(), timeout=RESPONSE_TIMEOUT)
                 msg = json.loads(raw)
 
+                has_content = False
                 ot = msg.get("outputTranscription")
                 if ot and ot.get("text"):
+                    has_content = True
                     if ot.get("finished"):
                         output_transcription_final.append(ot["text"])
                     else:
@@ -230,7 +355,11 @@ async def run_iteration(
                 for part in content.get("parts", []):
                     inline = part.get("inlineData")
                     if inline and inline.get("data"):
+                        has_content = True
                         audio_chunks.append(base64.b64decode(inline["data"]))
+
+                if has_content and not first_response_at:
+                    first_response_at.append(time.monotonic())
 
                 if msg.get("turnComplete"):
                     turn_complete.set()
@@ -264,6 +393,8 @@ async def run_iteration(
             break
         await asyncio.sleep(CHUNK_INTERVAL)
 
+    send_done_at.append(time.monotonic())
+
     # Wait for response
     try:
         await asyncio.wait_for(turn_complete.wait(), timeout=RESPONSE_TIMEOUT)
@@ -275,6 +406,13 @@ async def run_iteration(
         await recv_task
     except asyncio.CancelledError:
         pass
+
+    # Latency: time from end of audio send to first response
+    first_resp_sec = None
+    if first_response_at and send_done_at:
+        first_resp_sec = first_response_at[0] - send_done_at[0]
+        if first_resp_sec < 0:
+            first_resp_sec = first_response_at[0] - t0
 
     output_text = (
         output_transcription_final[-1]
@@ -292,9 +430,16 @@ async def run_iteration(
         except Exception as e:
             stt_text = f"(stt error: {e})"
 
-    # Verify translation
-    translated = output_text or stt_text or ""
-    if not translated:
+    # Glossary check: verify the display transcription appears in output
+    glossary_found = None
+    if glossary_entry and output_text:
+        expected_display = glossary_entry["transcription"]
+        glossary_found = expected_display in output_text
+
+    # Verify translation using STT of actual audio (what the user hears),
+    # falling back to output transcription if STT is unavailable.
+    verify_text = stt_text or output_text or ""
+    if not verify_text:
         return IterationResult(
             index=index,
             original=sentence,
@@ -302,11 +447,14 @@ async def run_iteration(
             stt_transcription=stt_text,
             error="no response",
             elapsed=time.monotonic() - t0,
+            first_response_sec=first_resp_sec,
+            glossary_term=glossary_term,
+            glossary_found=glossary_found,
         )
 
     try:
         passed, score, reason = verify_translation(
-            genai_client, sentence, translated, source, target
+            genai_client, sentence, verify_text, source, target
         )
     except Exception as e:
         return IterationResult(
@@ -316,6 +464,9 @@ async def run_iteration(
             stt_transcription=stt_text,
             error=f"verify: {e}",
             elapsed=time.monotonic() - t0,
+            first_response_sec=first_resp_sec,
+            glossary_term=glossary_term,
+            glossary_found=glossary_found,
         )
 
     return IterationResult(
@@ -327,7 +478,34 @@ async def run_iteration(
         score=score,
         reason=reason,
         elapsed=time.monotonic() - t0,
+        first_response_sec=first_resp_sec,
+        glossary_term=glossary_term,
+        glossary_found=glossary_found,
     )
+
+
+def _format_result_line(result: IterationResult) -> str:
+    display = result.output_transcription or result.stt_transcription or ""
+    if len(display) > 40:
+        display = display[:37] + "..."
+
+    latency_tag = ""
+    if result.first_response_sec is not None:
+        if result.first_response_sec > LATENCY_THRESHOLD:
+            latency_tag = f" SLOW({result.first_response_sec:.1f}s)"
+        else:
+            latency_tag = f" {result.first_response_sec:.1f}s"
+
+    glossary_tag = ""
+    if result.glossary_term:
+        if result.glossary_found:
+            glossary_tag = f" [G:{result.glossary_term}:OK]"
+        elif result.glossary_found is False:
+            glossary_tag = f" [G:{result.glossary_term}:MISS]"
+        else:
+            glossary_tag = f" [G:{result.glossary_term}:?]"
+
+    return latency_tag, glossary_tag, display
 
 
 async def main():
@@ -346,47 +524,69 @@ async def main():
 
     stats = Stats()
     start = time.monotonic()
+    glossary_cycle = iter(range(len(TEST_GLOSSARY)))
 
     print(f"[{stamp()}] Starting soak test: {args.source} -> {args.target}, duration={args.duration}s")
+    print(f"[{stamp()}] Glossary: {len(TEST_GLOSSARY)} entries")
     print(f"[{stamp()}] Connecting to {ws_url}")
 
     async with websockets.connect(ws_url) as ws:
-        await ws.send(json.dumps({"glossary": []}))
-        print(f"[{stamp()}] Connected, setup sent")
+        await ws.send(json.dumps({"glossary": TEST_GLOSSARY}))
+        print(f"[{stamp()}] Connected, setup sent with glossary")
 
         while time.monotonic() - start < args.duration:
             stats.iterations += 1
+
+            # Alternate: every 3rd iteration is a glossary test
+            glossary_entry = None
+            if stats.iterations % 3 == 0:
+                gi = next(glossary_cycle, None)
+                if gi is None:
+                    glossary_cycle = iter(range(len(TEST_GLOSSARY)))
+                    gi = next(glossary_cycle)
+                glossary_entry = TEST_GLOSSARY[gi]
+
             result = await run_iteration(
                 ws, genai_client, tts_client, stt_client,
                 stats.iterations, args.source, args.target,
+                glossary_entry=glossary_entry,
             )
             stats.results.append(result)
+
+            # Latency stats
+            if result.first_response_sec is not None:
+                if result.first_response_sec <= LATENCY_THRESHOLD:
+                    stats.latency_ok += 1
+                else:
+                    stats.latency_slow += 1
+
+            # Glossary stats
+            if result.glossary_found is not None:
+                stats.glossary_checked += 1
+                if result.glossary_found:
+                    stats.glossary_found += 1
+
+            latency_tag, glossary_tag, display = _format_result_line(result)
 
             if result.error:
                 stats.errors += 1
                 print(
-                    f"[{stamp()}] #{result.index} ERROR ({result.elapsed:.1f}s) | "
+                    f"[{stamp()}] #{result.index} ERROR ({result.elapsed:.1f}s){latency_tag}{glossary_tag} | "
                     f'"{result.original[:50]}" | {result.error}'
                 )
             elif result.passed:
                 stats.passed += 1
                 stats.total_score += result.score
-                display = result.output_transcription or result.stt_transcription or ""
-                if len(display) > 40:
-                    display = display[:37] + "..."
                 print(
                     f"[{stamp()}] #{result.index} PASS ({result.score:.0f}/10) "
-                    f'({result.elapsed:.1f}s) | "{result.original[:50]}" -> "{display}"'
+                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag} | "{result.original[:50]}" -> "{display}"'
                 )
             else:
                 stats.failed += 1
                 stats.total_score += result.score
-                display = result.output_transcription or result.stt_transcription or ""
-                if len(display) > 40:
-                    display = display[:37] + "..."
                 print(
                     f"[{stamp()}] #{result.index} FAIL ({result.score:.0f}/10) "
-                    f'({result.elapsed:.1f}s) | "{result.original[:50]}" -> "{display}"'
+                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag} | "{result.original[:50]}" -> "{display}"'
                     f" | {result.reason}"
                 )
 
@@ -403,6 +603,7 @@ async def main():
     elapsed = time.monotonic() - start
     scored = stats.passed + stats.failed
     avg_score = stats.total_score / scored if scored else 0
+    latency_measured = stats.latency_ok + stats.latency_slow
     print(f"\n[{stamp()}] === SUMMARY ===")
     print(
         f"Duration: {elapsed:.0f}s | Iterations: {stats.iterations} | "
@@ -410,6 +611,17 @@ async def main():
         f"({100 * stats.passed / stats.iterations:.1f}%) | "
         f"Avg score: {avg_score:.1f}/10 | Errors: {stats.errors}"
     )
+    if latency_measured:
+        print(
+            f"Latency (<{LATENCY_THRESHOLD}s): {stats.latency_ok}/{latency_measured} "
+            f"({100 * stats.latency_ok / latency_measured:.1f}%) | "
+            f"Slow: {stats.latency_slow}"
+        )
+    if stats.glossary_checked:
+        print(
+            f"Glossary: {stats.glossary_found}/{stats.glossary_checked} "
+            f"({100 * stats.glossary_found / stats.glossary_checked:.1f}%) terms matched in output"
+        )
 
     sys.exit(0 if stats.errors == 0 and stats.passed > 0 else 1)
 
