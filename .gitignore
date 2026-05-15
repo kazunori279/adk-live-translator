@@ -4,3 +4,4 @@ __pycache__/
 .adk/
 Screenshot*
 soak_*.jsonl
+soak_*.report

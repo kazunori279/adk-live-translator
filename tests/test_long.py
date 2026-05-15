@@ -508,9 +508,9 @@ async def run_iteration(
         expected_display = glossary_entry["transcription"]
         glossary_found = expected_display in output_text
 
-    # Verify translation using STT of actual audio (what the user hears),
-    # falling back to output transcription if STT is unavailable.
-    verify_text = stt_text or output_text or ""
+    # Verify translation using the model's own output transcription (not STT),
+    # since Cloud STT sometimes mishears correctly-spoken Japanese.
+    verify_text = output_text or stt_text or ""
     if not verify_text:
         return IterationResult(
             index=index,
@@ -568,26 +568,28 @@ async def run_iteration(
     )
 
 
-def _print_distribution(
+def _format_distribution(
     label: str,
     values: list[float],
     buckets: list[tuple[str, float, float]],
     bar_width: int = 30,
-) -> None:
-    """Print a histogram distribution for a list of values.
+) -> list[str]:
+    """Return histogram lines for a list of values.
 
     `buckets` is a list of (label, low_inclusive, high_exclusive).
     """
     if not values:
-        return
+        return []
     vals = sorted(values)
     n = len(vals)
     avg = sum(vals) / n
     p50 = vals[n // 2]
     p90 = vals[int(n * 0.9)]
     p99 = vals[int(n * 0.99)]
-    print(f"\n  {label} (n={n})")
-    print(f"  min={vals[0]:.2f}  avg={avg:.2f}  p50={p50:.2f}  p90={p90:.2f}  p99={p99:.2f}  max={vals[-1]:.2f}")
+    lines = [
+        f"\n  {label} (n={n})",
+        f"  min={vals[0]:.2f}  avg={avg:.2f}  p50={p50:.2f}  p90={p90:.2f}  p99={p99:.2f}  max={vals[-1]:.2f}",
+    ]
     counts = []
     for bl, lo, hi in buckets:
         c = sum(1 for v in vals if lo <= v < hi)
@@ -595,7 +597,8 @@ def _print_distribution(
     max_c = max(c for _, c in counts) if counts else 1
     for bl, c in counts:
         bar = "#" * int(c / max_c * bar_width) if max_c > 0 else ""
-        print(f"  {bl:>10s}: {c:4d} ({100 * c / n:5.1f}%) {bar}")
+        lines.append(f"  {bl:>10s}: {c:4d} ({100 * c / n:5.1f}%) {bar}")
+    return lines
 
 
 def _format_tags(result: IterationResult) -> tuple[str, str, str, str]:
@@ -766,23 +769,23 @@ async def main():
     elapsed = time.monotonic() - start
     scored = stats.passed + stats.failed
     avg_score = stats.total_score / scored if scored else 0
-    latency_measured = stats.latency_ok + stats.latency_slow
-    print(f"\n[{stamp()}] === SUMMARY ===")
-    print(
+    report: list[str] = []
+
+    report.append(f"\n[{stamp()}] === SUMMARY ===")
+    report.append(
         f"Duration: {elapsed:.0f}s | Iterations: {stats.iterations} | "
         f"Passed: {stats.passed}/{stats.iterations} "
         f"({100 * stats.passed / stats.iterations:.1f}%) | "
         f"Avg score: {avg_score:.1f}/10 | Errors: {stats.errors}"
     )
     if stats.glossary_checked:
-        print(
+        report.append(
             f"Glossary: {stats.glossary_found}/{stats.glossary_checked} "
             f"({100 * stats.glossary_found / stats.glossary_checked:.1f}%) terms matched in output"
         )
 
-    # Distribution reports
     fr_latencies = [r.first_response_sec for r in stats.results if r.first_response_sec is not None]
-    _print_distribution("First Response (speech-end to first audio/transcript)", fr_latencies, [
+    report.extend(_format_distribution("First Response (speech-end to first audio/transcript)", fr_latencies, [
         ("=0s", 0.0, 0.001),
         ("0-0.1s", 0.001, 0.1),
         ("0.1-0.5s", 0.1, 0.5),
@@ -790,10 +793,10 @@ async def main():
         ("1-2s", 1.0, 2.0),
         ("2-5s", 2.0, 5.0),
         (">5s", 5.0, 1e9),
-    ])
+    ]))
 
     tc_latencies = [r.turn_complete_sec for r in stats.results if r.turn_complete_sec is not None]
-    _print_distribution("Turn Complete (speech-end to full translation)", tc_latencies, [
+    report.extend(_format_distribution("Turn Complete (speech-end to full translation)", tc_latencies, [
         ("<2s", 0.0, 2.0),
         ("2-3s", 2.0, 3.0),
         ("3-4s", 3.0, 4.0),
@@ -801,45 +804,53 @@ async def main():
         ("5-7s", 5.0, 7.0),
         ("7-10s", 7.0, 10.0),
         (">10s", 10.0, 1e9),
-    ])
+    ]))
 
     scores = [r.score for r in stats.results if not r.error]
-    _print_distribution("Translation Score", scores, [
+    report.extend(_format_distribution("Translation Score", scores, [
         ("0-2", 0.0, 2.5),
         ("3-4", 2.5, 4.5),
         ("5-6", 4.5, 6.5),
         ("7-8", 6.5, 8.5),
         ("9-10", 8.5, 10.1),
-    ])
+    ]))
 
-    _print_distribution("Input Transcription Score", stats.input_transcription_scores, [
+    report.extend(_format_distribution("Input Transcription Score", stats.input_transcription_scores, [
         ("0-2", 0.0, 2.5),
         ("3-4", 2.5, 4.5),
         ("5-6", 4.5, 6.5),
         ("7-8", 6.5, 8.5),
         ("9-10", 8.5, 10.1),
-    ])
+    ]))
 
-    _print_distribution("Output Transcription Score", stats.output_transcription_scores, [
+    report.extend(_format_distribution("Output Transcription Score", stats.output_transcription_scores, [
         ("0-2", 0.0, 2.5),
         ("3-4", 2.5, 4.5),
         ("5-6", 4.5, 6.5),
         ("7-8", 6.5, 8.5),
         ("9-10", 8.5, 10.1),
-    ])
+    ]))
 
     elapsed_vals = [r.elapsed for r in stats.results if not r.error]
-    _print_distribution("Total Iteration Time", elapsed_vals, [
+    report.extend(_format_distribution("Total Iteration Time", elapsed_vals, [
         ("<10s", 0.0, 10.0),
         ("10-15s", 10.0, 15.0),
         ("15-20s", 15.0, 20.0),
         ("20-25s", 20.0, 25.0),
         ("25-30s", 25.0, 30.0),
         (">30s", 30.0, 1e9),
-    ])
+    ]))
+
+    for line in report:
+        print(line)
+
+    report_path = log_path.replace(".jsonl", ".report")
+    with open(report_path, "w") as f:
+        f.write("\n".join(report) + "\n")
 
     log_file.close()
     print(f"[{stamp()}] Metrics log: {log_path}")
+    print(f"[{stamp()}] Report: {report_path}")
     sys.exit(0 if stats.errors == 0 and stats.passed > 0 else 1)
 
 
