@@ -302,6 +302,12 @@ async def websocket_endpoint(
                         saw_message = False
                         async for msg in session.receive():
                             saw_message = True
+                            if msg.go_away is not None:
+                                logger.info(
+                                    "GoAway received (time_left=%s); will reopen",
+                                    msg.go_away.time_left,
+                                )
+                                break
                             update = msg.session_resumption_update
                             if update and update.resumable and update.new_handle:
                                 _resume_handle_put(session_id, update.new_handle)
