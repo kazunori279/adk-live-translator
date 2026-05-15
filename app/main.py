@@ -39,7 +39,7 @@ from translator_agent import (  # noqa: E402
 MAX_GLOSSARY_ENTRIES = 1000  # safety cap on per-session glossary length
 SETUP_TIMEOUT_SEC = 5  # how long to wait for the client's setup message
 AUTHOR = "live_translator"  # constant author tag echoed in every server frame
-RESUME_TTL_SEC = 600  # Live API session-resumption window
+RESUME_TTL_SEC = 900  # local eviction buffer; Live API has the real ~10min window
 
 # session_id -> (resumption_handle, monotonic_timestamp). Lazily evicted on
 # access. Single-process, single-replica only — multi-replica needs a shared
@@ -211,77 +211,95 @@ async def websocket_endpoint(
         return
 
     system_instruction = build_system_instruction(source, target, glossary_entries)
-    prior_handle = _resume_handle_get(session_id)
-    if prior_handle:
-        logger.debug("Resuming session_id=%s with stored handle", session_id)
-    config = types.LiveConnectConfig(
-        response_modalities=[types.Modality.AUDIO],
-        input_audio_transcription=types.AudioTranscriptionConfig(),
-        output_audio_transcription=types.AudioTranscriptionConfig(),
-        system_instruction=types.Content(parts=[types.Part(text=system_instruction)]),
-        session_resumption=types.SessionResumptionConfig(handle=prior_handle),
-    )
 
-    try:
-        async with client.aio.live.connect(model=MODEL, config=config) as session:
-            logger.debug("Live session opened with model=%s", MODEL)
+    # Shared state between the upstream forwarder and the session loop. The
+    # forwarder has the lifetime of the browser WebSocket and writes to whichever
+    # Live session is currently open; the session loop tears down old sessions
+    # and opens fresh ones (with the resumption handle) as the Live API expires
+    # them, without ever closing the browser-facing WS.
+    current_session: types.AsyncSession | None = None
 
-            async def upstream_task() -> None:
-                """Forward browser audio frames into the Live session."""
+    async def upstream_task() -> None:
+        """Forward browser audio into whichever Live session is current."""
+        try:
+            while True:
+                message = await websocket.receive()
+                if message.get("type") == "websocket.disconnect":
+                    logger.debug("Upstream: client disconnected")
+                    return
+                if "bytes" in message:
+                    audio = message["bytes"]
+                    sess = current_session
+                    if sess is None:
+                        # No active session right now (between upstream
+                        # reconnects). Drop the chunk; resumption preserves
+                        # model context across the gap.
+                        continue
+                    try:
+                        await sess.send_realtime_input(
+                            audio=types.Blob(
+                                mime_type="audio/pcm;rate=16000", data=audio
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        # Session closed mid-send; drop and let the loop reopen.
+                        pass
+                elif "text" in message:
+                    logger.debug("Ignoring text message (audio-only)")
+        except WebSocketDisconnect:
+            logger.debug("Upstream: client disconnected")
+
+    async def session_loop() -> None:
+        """Open Gemini Live sessions in succession, resuming each via stored handle."""
+        nonlocal current_session
+        while True:
+            prior_handle = _resume_handle_get(session_id)
+            config = types.LiveConnectConfig(
+                response_modalities=[types.Modality.AUDIO],
+                input_audio_transcription=types.AudioTranscriptionConfig(),
+                output_audio_transcription=types.AudioTranscriptionConfig(),
+                system_instruction=types.Content(
+                    parts=[types.Part(text=system_instruction)]
+                ),
+                session_resumption=types.SessionResumptionConfig(handle=prior_handle),
+            )
+            logger.debug(
+                "Opening Live session (resume=%s)", "yes" if prior_handle else "no"
+            )
+            async with client.aio.live.connect(model=MODEL, config=config) as session:
+                current_session = session
                 try:
                     while True:
-                        message = await websocket.receive()
-                        if message.get("type") == "websocket.disconnect":
-                            logger.debug("Upstream: client disconnected")
-                            return
-                        if "bytes" in message:
-                            audio = message["bytes"]
-                            logger.debug("Received audio chunk: %d bytes", len(audio))
-                            await session.send_realtime_input(
-                                audio=types.Blob(
-                                    mime_type="audio/pcm;rate=16000", data=audio
-                                )
+                        saw_message = False
+                        async for msg in session.receive():
+                            saw_message = True
+                            update = msg.session_resumption_update
+                            if update and update.resumable and update.new_handle:
+                                _resume_handle_put(session_id, update.new_handle)
+                            envelope = _envelope_from(msg)
+                            if envelope is None:
+                                continue
+                            await websocket.send_text(json.dumps(envelope))
+                        if not saw_message:
+                            logger.debug(
+                                "Live session ended; reopening with stored handle"
                             )
-                        elif "text" in message:
-                            logger.debug("Ignoring text message (audio-only)")
-                except WebSocketDisconnect:
-                    logger.debug("Upstream: client disconnected")
+                            break
+                finally:
+                    current_session = None
 
-            async def downstream_task() -> None:
-                """Forward model events back to the browser as JSON envelopes.
-
-                The SDK's `session.receive()` returns per-turn (it `break`s after
-                `turn_complete`), so we wrap it in an outer loop and only exit
-                when the underlying session itself ends.
-                """
-                while True:
-                    saw_message = False
-                    async for msg in session.receive():
-                        saw_message = True
-                        update = msg.session_resumption_update
-                        if update and update.resumable and update.new_handle:
-                            _resume_handle_put(session_id, update.new_handle)
-                        envelope = _envelope_from(msg)
-                        if envelope is None:
-                            continue
-                        payload = json.dumps(envelope)
-                        logger.debug("[SERVER] Event: %s", payload)
-                        await websocket.send_text(payload)
-                    if not saw_message:
-                        logger.debug("Live session ended (no more turns)")
-                        return
-
-            up = asyncio.create_task(upstream_task())
-            down = asyncio.create_task(downstream_task())
-            done, pending = await asyncio.wait(
-                {up, down}, return_when=asyncio.FIRST_COMPLETED
-            )
-            for t in pending:
-                t.cancel()
-            for t in done:
-                exc = t.exception()
-                if exc and not isinstance(exc, WebSocketDisconnect):
-                    raise exc
+    try:
+        up = asyncio.create_task(upstream_task())
+        loop_task = asyncio.create_task(session_loop())
+        done, pending = await asyncio.wait(
+            {up, loop_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        for t in pending:
+            t.cancel()
+        for t in done:
+            exc = t.exception()
+            if exc and not isinstance(exc, WebSocketDisconnect):
+                raise exc
     except WebSocketDisconnect:
         logger.debug("Client disconnected normally")
     except Exception:  # noqa: BLE001
