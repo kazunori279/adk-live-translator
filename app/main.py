@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+import time
 import warnings
 from pathlib import Path
 
@@ -38,6 +39,26 @@ from translator_agent import (  # noqa: E402
 MAX_GLOSSARY_ENTRIES = 1000  # safety cap on per-session glossary length
 SETUP_TIMEOUT_SEC = 5  # how long to wait for the client's setup message
 AUTHOR = "live_translator"  # constant author tag echoed in every server frame
+RESUME_TTL_SEC = 600  # Live API session-resumption window
+
+# session_id -> (resumption_handle, monotonic_timestamp). Lazily evicted on
+# access. Single-process, single-replica only — multi-replica needs a shared
+# store (Redis), but README pins --max-instances 1 so this is sufficient.
+_resume_handles: dict[str, tuple[str, float]] = {}
+
+
+def _resume_handle_get(session_id: str) -> str | None:
+    """Look up the most recent resumption handle for `session_id`, evicting stale entries."""
+    now = time.monotonic()
+    for k, (_, ts) in list(_resume_handles.items()):
+        if now - ts > RESUME_TTL_SEC:
+            _resume_handles.pop(k, None)
+    entry = _resume_handles.get(session_id)
+    return entry[0] if entry else None
+
+
+def _resume_handle_put(session_id: str, handle: str) -> None:
+    _resume_handles[session_id] = (handle, time.monotonic())
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -190,11 +211,15 @@ async def websocket_endpoint(
         return
 
     system_instruction = build_system_instruction(source, target, glossary_entries)
+    prior_handle = _resume_handle_get(session_id)
+    if prior_handle:
+        logger.debug("Resuming session_id=%s with stored handle", session_id)
     config = types.LiveConnectConfig(
         response_modalities=[types.Modality.AUDIO],
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         system_instruction=types.Content(parts=[types.Part(text=system_instruction)]),
+        session_resumption=types.SessionResumptionConfig(handle=prior_handle),
     )
 
     try:
@@ -233,6 +258,9 @@ async def websocket_endpoint(
                     saw_message = False
                     async for msg in session.receive():
                         saw_message = True
+                        update = msg.session_resumption_update
+                        if update and update.resumable and update.new_handle:
+                            _resume_handle_put(session_id, update.new_handle)
                         envelope = _envelope_from(msg)
                         if envelope is None:
                             continue
