@@ -317,60 +317,60 @@ function connectWebsocket() {
   };
 
   websocket.onmessage = function (event) {
-    const adkEvent = JSON.parse(event.data);
+    const serverMsg = JSON.parse(event.data);
 
     // Console logging
     let eventSummary = 'Event';
     let eventEmoji = '📨';
-    const author = adkEvent.author || 'system';
+    const author = serverMsg.author || 'system';
 
-    if (adkEvent.turnComplete) {
+    if (serverMsg.turnComplete) {
       eventSummary = 'Turn Complete';
       eventEmoji = '✅';
-    } else if (adkEvent.interrupted) {
+    } else if (serverMsg.interrupted) {
       eventSummary = 'Interrupted';
       eventEmoji = '⏸️';
-    } else if (adkEvent.inputTranscription) {
-      const t = adkEvent.inputTranscription.text || '';
+    } else if (serverMsg.inputTranscription) {
+      const t = serverMsg.inputTranscription.text || '';
       eventSummary = `Input: "${t.length > 60 ? t.substring(0, 60) + '...' : t}"`;
       eventEmoji = '📝';
-    } else if (adkEvent.outputTranscription) {
-      const t = adkEvent.outputTranscription.text || '';
+    } else if (serverMsg.outputTranscription) {
+      const t = serverMsg.outputTranscription.text || '';
       eventSummary = `Output: "${t.length > 60 ? t.substring(0, 60) + '...' : t}"`;
       eventEmoji = '📝';
-    } else if (adkEvent.usageMetadata) {
-      const u = adkEvent.usageMetadata;
+    } else if (serverMsg.usageMetadata) {
+      const u = serverMsg.usageMetadata;
       eventSummary = `Tokens: ${(u.totalTokenCount || 0).toLocaleString()} total`;
       eventEmoji = '📊';
-    } else if (adkEvent.content && adkEvent.content.parts) {
-      const hasText = adkEvent.content.parts.some(p => p.text);
-      const hasAudio = adkEvent.content.parts.some(p => p.inlineData);
+    } else if (serverMsg.content && serverMsg.content.parts) {
+      const hasText = serverMsg.content.parts.some(p => p.text);
+      const hasAudio = serverMsg.content.parts.some(p => p.inlineData);
 
       if (hasText) {
-        const textPart = adkEvent.content.parts.find(p => p.text);
+        const textPart = serverMsg.content.parts.find(p => p.text);
         const t = textPart?.text || '';
         eventSummary = `Text: "${t.length > 80 ? t.substring(0, 80) + '...' : t}"`;
         eventEmoji = '💭';
       }
 
       if (hasAudio) {
-        const audioPart = adkEvent.content.parts.find(p => p.inlineData);
+        const audioPart = serverMsg.content.parts.find(p => p.inlineData);
         const byteSize = Math.floor((audioPart?.inlineData?.data?.length || 0) * 0.75);
         eventSummary = `Audio: ${byteSize.toLocaleString()} bytes`;
         eventEmoji = '🔊';
-        addConsoleEntry('incoming', eventSummary, sanitizeEventForDisplay(adkEvent), eventEmoji, author, true);
+        addConsoleEntry('incoming', eventSummary, sanitizeEventForDisplay(serverMsg), eventEmoji, author, true);
       }
     }
 
-    const isAudioOnlyEvent = adkEvent.content && adkEvent.content.parts &&
-      adkEvent.content.parts.some(p => p.inlineData) &&
-      !adkEvent.content.parts.some(p => p.text);
+    const isAudioOnlyEvent = serverMsg.content && serverMsg.content.parts &&
+      serverMsg.content.parts.some(p => p.inlineData) &&
+      !serverMsg.content.parts.some(p => p.text);
     if (!isAudioOnlyEvent) {
-      addConsoleEntry('incoming', eventSummary, sanitizeEventForDisplay(adkEvent), eventEmoji, author);
+      addConsoleEntry('incoming', eventSummary, sanitizeEventForDisplay(serverMsg), eventEmoji, author);
     }
 
     // Handle turn complete
-    if (adkEvent.turnComplete === true) {
+    if (serverMsg.turnComplete === true) {
       if (currentBubbleElement) {
         const ti = currentBubbleElement.querySelector(".typing-indicator");
         if (ti) ti.remove();
@@ -390,7 +390,7 @@ function connectWebsocket() {
     }
 
     // Handle interrupted
-    if (adkEvent.interrupted === true) {
+    if (serverMsg.interrupted === true) {
       if (audioPlayerNode) {
         audioPlayerNode.port.postMessage({ command: "endOfAudio" });
       }
@@ -415,9 +415,9 @@ function connectWebsocket() {
     }
 
     // Handle input transcription (user's spoken words)
-    if (adkEvent.inputTranscription && adkEvent.inputTranscription.text) {
-      const transcriptionText = adkEvent.inputTranscription.text;
-      const isFinished = adkEvent.inputTranscription.finished;
+    if (serverMsg.inputTranscription && serverMsg.inputTranscription.text) {
+      const transcriptionText = serverMsg.inputTranscription.text;
+      const isFinished = serverMsg.inputTranscription.finished;
 
       if (transcriptionText) {
         if (inputTranscriptionFinished) return;
@@ -451,9 +451,9 @@ function connectWebsocket() {
     }
 
     // Handle output transcription (translated speech)
-    if (adkEvent.outputTranscription && adkEvent.outputTranscription.text) {
-      const transcriptionText = adkEvent.outputTranscription.text;
-      const isFinished = adkEvent.outputTranscription.finished;
+    if (serverMsg.outputTranscription && serverMsg.outputTranscription.text) {
+      const transcriptionText = serverMsg.outputTranscription.text;
+      const isFinished = serverMsg.outputTranscription.finished;
       hasOutputTranscriptionInTurn = true;
 
       if (transcriptionText) {
@@ -493,8 +493,8 @@ function connectWebsocket() {
     }
 
     // Handle content events (text or audio)
-    if (adkEvent.content && adkEvent.content.parts) {
-      const parts = adkEvent.content.parts;
+    if (serverMsg.content && serverMsg.content.parts) {
+      const parts = serverMsg.content.parts;
 
       if (currentInputTranscriptionId != null && currentMessageId == null && currentOutputTranscriptionId == null) {
         const textElement = currentInputTranscriptionElement.querySelector(".bubble-text");
@@ -516,7 +516,7 @@ function connectWebsocket() {
 
         if (part.text) {
           if (part.thought) continue;
-          if (!adkEvent.partial && hasOutputTranscriptionInTurn) continue;
+          if (!serverMsg.partial && hasOutputTranscriptionInTurn) continue;
 
           if (currentMessageId == null) {
             currentMessageId = Math.random().toString(36).substring(7);

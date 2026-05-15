@@ -1,8 +1,11 @@
-"""FastAPI application for real-time live translation using ADK Gemini Live API."""
+"""FastAPI application for real-time live translation using the Gemini Live API."""
 
 import asyncio
+import base64
 import json
 import logging
+import os
+import sys
 import warnings
 from pathlib import Path
 
@@ -10,62 +13,47 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from google.adk.agents.live_request_queue import LiveRequestQueue
-from google.adk.agents.run_config import RunConfig, StreamingMode
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
 
-# Load environment variables from .env file BEFORE importing agent
+# Load environment variables from .env file BEFORE constructing the genai client.
 load_dotenv(Path(__file__).parent / ".env")
 
-# Ensure non-Vertex AI mode for Gemini API key auth
-# These env vars cause the SDK to route through aiplatform.googleapis.com
-import os
-
+# Ensure non-Vertex AI mode for Gemini API key auth.
+# These env vars cause the SDK to route through aiplatform.googleapis.com.
 os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
 os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
 os.environ.pop("GOOGLE_CLOUD_LOCATION", None)
 
-# Import agent after loading environment variables
-# pylint: disable=wrong-import-position
-import sys
+from google import genai  # noqa: E402
+from google.genai import types  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).parent))
-from translator_agent.agent import (  # noqa: E402
+from translator_agent import (  # noqa: E402
     LANGUAGES,
+    MODEL,
     POPULAR_LANGUAGES,
-    agent,
-    create_agent,
+    build_system_instruction,
     load_default_glossary,
 )
 
 MAX_GLOSSARY_ENTRIES = 1000  # safety cap on per-session glossary length
 SETUP_TIMEOUT_SEC = 5  # how long to wait for the client's setup message
+AUTHOR = "live_translator"  # constant author tag echoed in every server frame
 
-# Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Suppress Pydantic serialization warnings
+# Suppress Pydantic serialization warnings emitted by the genai SDK.
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
-
-APP_NAME = "live-translation"
-
-# ========================================
-# Phase 1: Application Initialization
-# ========================================
 
 app = FastAPI()
 
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-session_service = InMemorySessionService()
-runner = Runner(app_name=APP_NAME, agent=agent, session_service=session_service)
+client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
 
 @app.get("/")
@@ -111,6 +99,62 @@ def _parse_setup(raw: str) -> list[tuple[str, str, str]]:
     return entries
 
 
+def _envelope_from(msg: types.LiveServerMessage) -> dict | None:
+    """Translate a LiveServerMessage into the camelCase JSON shape `app.js` expects.
+
+    Returns None for messages the client doesn't care about (setup acks, go_away,
+    session-resumption updates) so the caller can skip them.
+    """
+    out: dict = {}
+
+    sc = msg.server_content
+    if sc:
+        if sc.turn_complete:
+            out["turnComplete"] = True
+        if sc.interrupted:
+            out["interrupted"] = True
+        if sc.input_transcription:
+            out["inputTranscription"] = {
+                "text": sc.input_transcription.text or "",
+                "finished": bool(sc.input_transcription.finished),
+            }
+        if sc.output_transcription:
+            out["outputTranscription"] = {
+                "text": sc.output_transcription.text or "",
+                "finished": bool(sc.output_transcription.finished),
+            }
+        if sc.model_turn and sc.model_turn.parts:
+            parts = []
+            for p in sc.model_turn.parts:
+                pj: dict = {}
+                if p.text is not None:
+                    pj["text"] = p.text
+                if p.thought:
+                    pj["thought"] = True
+                if p.inline_data and p.inline_data.data is not None:
+                    pj["inlineData"] = {
+                        "mimeType": p.inline_data.mime_type or "",
+                        "data": base64.b64encode(p.inline_data.data).decode("ascii"),
+                    }
+                if pj:
+                    parts.append(pj)
+            if parts:
+                out["content"] = {"role": "model", "parts": parts}
+                # Streaming chunks are partial; the final frame carries turn_complete.
+                if not sc.turn_complete:
+                    out["partial"] = True
+
+    if msg.usage_metadata:
+        out["usageMetadata"] = msg.usage_metadata.model_dump(
+            by_alias=True, exclude_none=True, mode="json"
+        )
+
+    if not out:
+        return None
+    out["author"] = AUTHOR
+    return out
+
+
 @app.websocket("/ws/{user_id}/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -119,17 +163,13 @@ async def websocket_endpoint(
     source: str = "en",
     target: str = "ja",
 ) -> None:
-    """WebSocket endpoint for bidirectional streaming translation."""
+    """WebSocket endpoint bridging browser audio to a Gemini Live session."""
     logger.debug(
         f"WebSocket connection request: user_id={user_id}, session_id={session_id}, "
         f"source={source}, target={target}"
     )
     await websocket.accept()
     logger.debug("WebSocket connection accepted")
-
-    # ========================================
-    # Phase 2: Session Initialization
-    # ========================================
 
     # Wait for the client's setup message (carries the per-session glossary).
     # Falls back to the on-disk default glossary if the client doesn't send one
@@ -149,95 +189,74 @@ async def websocket_endpoint(
         logger.debug("Client disconnected before sending setup")
         return
 
-    # Create per-connection agent and runner for the selected language pair
-    connection_agent = create_agent(source, target, glossary_entries)
-    connection_runner = Runner(
-        app_name=APP_NAME, agent=connection_agent, session_service=session_service
+    system_instruction = build_system_instruction(source, target, glossary_entries)
+    config = types.LiveConnectConfig(
+        response_modalities=[types.Modality.AUDIO],
+        input_audio_transcription=types.AudioTranscriptionConfig(),
+        output_audio_transcription=types.AudioTranscriptionConfig(),
+        system_instruction=types.Content(parts=[types.Part(text=system_instruction)]),
     )
-
-    model_name = connection_agent.model
-    # Native audio models: contain "native-audio" or "live-preview" in name
-    is_native_audio = (
-        "native-audio" in model_name.lower() or "live-preview" in model_name.lower()
-    )
-
-    if is_native_audio:
-        run_config = RunConfig(
-            streaming_mode=StreamingMode.BIDI,
-            response_modalities=["AUDIO"],
-            input_audio_transcription=types.AudioTranscriptionConfig(),
-            output_audio_transcription=types.AudioTranscriptionConfig(),
-            session_resumption=types.SessionResumptionConfig(),
-        )
-        logger.debug(
-            f"Native audio model detected: {model_name}, using AUDIO response modality"
-        )
-    else:
-        run_config = RunConfig(
-            streaming_mode=StreamingMode.BIDI,
-            response_modalities=["TEXT"],
-            input_audio_transcription=None,
-            output_audio_transcription=None,
-            session_resumption=types.SessionResumptionConfig(),
-        )
-        logger.debug(
-            f"Half-cascade model detected: {model_name}, using TEXT response modality"
-        )
-
-    session = await session_service.get_session(
-        app_name=APP_NAME, user_id=user_id, session_id=session_id
-    )
-    if not session:
-        await session_service.create_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id
-        )
-
-    live_request_queue = LiveRequestQueue()
-
-    # ========================================
-    # Phase 3: Active Session
-    # ========================================
-
-    async def upstream_task() -> None:
-        """Receives messages from WebSocket and sends to LiveRequestQueue."""
-        logger.debug("upstream_task started")
-        while True:
-            message = await websocket.receive()
-
-            if "bytes" in message:
-                audio_data = message["bytes"]
-                logger.debug(f"Received binary audio chunk: {len(audio_data)} bytes")
-                audio_blob = types.Blob(
-                    mime_type="audio/pcm;rate=16000", data=audio_data
-                )
-                live_request_queue.send_realtime(audio_blob)
-
-            elif "text" in message:
-                logger.debug("Ignoring text message (translator is audio-only)")
-
-    async def downstream_task() -> None:
-        """Receives Events from run_live() and sends to WebSocket."""
-        logger.debug("downstream_task started")
-        async for event in connection_runner.run_live(
-            user_id=user_id,
-            session_id=session_id,
-            live_request_queue=live_request_queue,
-            run_config=run_config,
-        ):
-            event_json = event.model_dump_json(exclude_none=True, by_alias=True)
-            logger.debug(f"[SERVER] Event: {event_json}")
-            await websocket.send_text(event_json)
-        logger.debug("run_live() generator completed")
 
     try:
-        await asyncio.gather(upstream_task(), downstream_task())
+        async with client.aio.live.connect(model=MODEL, config=config) as session:
+            logger.debug("Live session opened with model=%s", MODEL)
+
+            async def upstream_task() -> None:
+                """Forward browser audio frames into the Live session."""
+                try:
+                    while True:
+                        message = await websocket.receive()
+                        if message.get("type") == "websocket.disconnect":
+                            logger.debug("Upstream: client disconnected")
+                            return
+                        if "bytes" in message:
+                            audio = message["bytes"]
+                            logger.debug("Received audio chunk: %d bytes", len(audio))
+                            await session.send_realtime_input(
+                                audio=types.Blob(
+                                    mime_type="audio/pcm;rate=16000", data=audio
+                                )
+                            )
+                        elif "text" in message:
+                            logger.debug("Ignoring text message (audio-only)")
+                except WebSocketDisconnect:
+                    logger.debug("Upstream: client disconnected")
+
+            async def downstream_task() -> None:
+                """Forward model events back to the browser as JSON envelopes.
+
+                The SDK's `session.receive()` returns per-turn (it `break`s after
+                `turn_complete`), so we wrap it in an outer loop and only exit
+                when the underlying session itself ends.
+                """
+                while True:
+                    saw_message = False
+                    async for msg in session.receive():
+                        saw_message = True
+                        envelope = _envelope_from(msg)
+                        if envelope is None:
+                            continue
+                        payload = json.dumps(envelope)
+                        logger.debug("[SERVER] Event: %s", payload)
+                        await websocket.send_text(payload)
+                    if not saw_message:
+                        logger.debug("Live session ended (no more turns)")
+                        return
+
+            up = asyncio.create_task(upstream_task())
+            down = asyncio.create_task(downstream_task())
+            done, pending = await asyncio.wait(
+                {up, down}, return_when=asyncio.FIRST_COMPLETED
+            )
+            for t in pending:
+                t.cancel()
+            for t in done:
+                exc = t.exception()
+                if exc and not isinstance(exc, WebSocketDisconnect):
+                    raise exc
     except WebSocketDisconnect:
         logger.debug("Client disconnected normally")
-    except Exception as e:
-        logger.error(f"Unexpected error in streaming tasks: {e}", exc_info=True)
+    except Exception:  # noqa: BLE001
+        logger.exception("Unexpected error in streaming tasks")
     finally:
-        # ========================================
-        # Phase 4: Session Termination
-        # ========================================
-        logger.debug("Closing live_request_queue")
-        live_request_queue.close()
+        logger.debug("WebSocket handler exiting")

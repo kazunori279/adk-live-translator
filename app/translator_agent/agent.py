@@ -1,10 +1,8 @@
-"""Real-time translator agent definition."""
+"""Translator system instruction + glossary helpers."""
 
 import csv
 import os
 from pathlib import Path
-
-from google.adk.agents import Agent
 
 POPULAR_LANGUAGES = ["en", "ja", "zh", "es", "fr", "de", "pt", "ko", "hi", "ar"]
 
@@ -153,29 +151,21 @@ def _glossary_section(entries: list[GlossaryEntry]) -> str:
 MODEL = os.getenv("DEMO_AGENT_MODEL", "gemini-3.1-flash-live-preview")
 
 
-def create_agent(
+def build_system_instruction(
     source_lang: str = "en",
     target_lang: str = "ja",
     glossary_entries: list[GlossaryEntry] | None = None,
-) -> Agent:
-    """Create a translator agent for the given language pair and glossary."""
+) -> str:
+    """Build the translator system instruction for the given language pair and glossary."""
     source_name = LANGUAGES.get(source_lang, source_lang)
     target_name = LANGUAGES.get(target_lang, target_lang)
     entries = (
         glossary_entries if glossary_entries is not None else load_default_glossary()
     )
-    return Agent(
-        name="live_translator",
-        model=MODEL,
-        instruction=(
-            f"You are a real-time translator from {source_name} to {target_name}. "
-            f"Listen to the incoming audio and immediately output the translated "
-            f"version in {target_name}, maintaining the speaker's original tone "
-            f"and urgency."
-            + _glossary_section(entries)
-        ),
+    return (
+        f"You are a real-time translator from {source_name} to {target_name}. "
+        f"Listen to the incoming audio and immediately output the translated "
+        f"version in {target_name}, maintaining the speaker's original tone "
+        f"and urgency."
+        + _glossary_section(entries)
     )
-
-
-# Default agent for backward compatibility
-agent = create_agent()

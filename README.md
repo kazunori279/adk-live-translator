@@ -1,6 +1,6 @@
-# ADK Live Translator
+# Live Translator
 
-Real-time audio translation app powered by ADK Gemini Live API Toolkit. Speak in any language and get immediate audio translation in your chosen target language.
+Real-time audio translation app powered by Gemini Live API. Speak in any language and get immediate audio translation in your chosen target language.
 
 Supports 97 languages including English, Japanese, Chinese, Spanish, French, German, Portuguese, Korean, Hindi, Arabic, and many more.
 
@@ -60,16 +60,15 @@ Open http://localhost:8000 and click **Start Audio** to begin translating.
 
 ## Architecture
 
-Uses ADK's 4-phase bidi-streaming lifecycle over WebSocket:
+FastAPI bridges a browser WebSocket to one Gemini Live API session per connection via `google-genai`'s `client.aio.live.connect(...)`:
 
-1. **App init** — FastAPI server, default Agent (`gemini-3.1-flash-live-preview`), Runner, in-memory SessionService.
-2. **Session init** — On WebSocket connect the server reads a JSON setup message (`{glossary: [...]}`) sent by the browser as the first frame, then constructs a per-connection Agent whose system instruction includes that glossary. RunConfig is set up with AUDIO modality, input/output transcription, and session resumption.
-3. **Active streaming** — Concurrent upstream (mic → `LiveRequestQueue`) and downstream (`run_live` → WebSocket) tasks. The frontend swaps `target` → `transcription` on incoming output-transcription text before rendering.
-4. **Termination** — `LiveRequestQueue.close()` on disconnect.
+1. **Session init** — On WebSocket connect the server reads a JSON setup message (`{glossary: [...]}`) sent by the browser as the first frame, builds a per-connection system instruction that embeds the glossary, and opens a `LiveConnectConfig` with AUDIO modality and input/output transcription.
+2. **Active streaming** — Concurrent upstream (mic → `session.send_realtime_input(audio=...)`) and downstream (`session.receive()` → WebSocket) tasks. `session.receive()` is per-turn, so the downstream loop wraps it in an outer loop to span multiple turns. The server translates each `LiveServerMessage` into a small camelCase JSON envelope the frontend expects (`turnComplete`, `inputTranscription`, `outputTranscription`, `content.parts[]`, `usageMetadata`). The frontend swaps `target` → `transcription` on incoming output-transcription text before rendering.
+3. **Termination** — When either side finishes (client disconnects or live session ends), `asyncio.wait(FIRST_COMPLETED)` cancels its partner and the `async with` exits, closing the upstream connection to Google.
 
 ## Model
 
-Uses `gemini-3.1-flash-live-preview` with the Gemini API (`generativelanguage.googleapis.com`). This is a native audio model supporting real-time audio input/output with transcription. The app sends audio via `realtime_input` (audio blobs).
+Uses `gemini-3.1-flash-live-preview` with the Gemini API (`generativelanguage.googleapis.com`). This is a native audio model supporting real-time audio input/output with transcription. The app sends audio via `send_realtime_input` (16 kHz mono PCM) and receives audio at 24 kHz.
 
 The system instruction is built in `app/translator_agent/agent.py` as:
 
