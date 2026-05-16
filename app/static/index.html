@@ -18,7 +18,7 @@
         <button id="openGlossary" class="toggle-console-btn">Glossary</button>
         <button id="toggleConsole" class="toggle-console-btn">Console</button>
         <div class="connection-status">
-          <span class="status-indicator" id="statusIndicator"></span>
+          <span class="status-indicator connecting" id="statusIndicator"></span>
           <span id="statusText">Connecting...</span>
         </div>
       </div>
@@ -79,9 +79,9 @@
                 <input type="hidden" id="targetLang" value="ja">
               </div>
             </div>
-            <button type="button" id="startAudioButton">Start</button>
+            <button type="button" id="startAudioButton" disabled>Start</button>
             <label class="ptt-toggle">
-              <input type="checkbox" id="pttToggle">
+              <input type="checkbox" id="pttToggle" disabled>
               <span class="ptt-slider"></span>
               <span class="ptt-label">Push to Talk</span>
             </label>

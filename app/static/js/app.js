@@ -233,12 +233,18 @@ toggleConsoleBtn.addEventListener('click', () => {
   toggleConsoleBtn.classList.toggle('active');
 });
 
-function updateConnectionStatus(connected) {
-  if (connected) {
+function updateConnectionStatus(status) {
+  if (status === "connected") {
     statusIndicator.classList.remove("disconnected");
+    statusIndicator.classList.remove("connecting");
     statusText.textContent = "Connected";
+  } else if (status === "connecting") {
+    statusIndicator.classList.remove("disconnected");
+    statusIndicator.classList.add("connecting");
+    statusText.textContent = "Connecting...";
   } else {
     statusIndicator.classList.add("disconnected");
+    statusIndicator.classList.remove("connecting");
     statusText.textContent = "Disconnected";
   }
 }
@@ -305,14 +311,27 @@ function sanitizeEventForDisplay(event) {
   return sanitized;
 }
 
+// Connecting state (declared early — used inside connectWebsocket)
+let connectingMsgDiv = null;
+let serverReady = false;
+
+function showConnectingMessage() {
+  if (connectingMsgDiv) connectingMsgDiv.remove();
+  connectingMsgDiv = document.createElement("div");
+  connectingMsgDiv.className = "system-message";
+  connectingMsgDiv.textContent = "Connecting...";
+  messagesDiv.appendChild(connectingMsgDiv);
+  scrollToBottom();
+}
+
 // WebSocket handlers
 function connectWebsocket() {
   const ws_url = getWebSocketUrl();
   websocket = new WebSocket(ws_url);
+  showConnectingMessage();
 
   websocket.onopen = function () {
-    updateConnectionStatus(true);
-    addSystemMessage("Connected to translation server");
+    updateConnectionStatus("connecting");
     // First message must be the setup payload (carries the per-browser glossary).
     websocket.send(JSON.stringify({ glossary: getGlossary() }));
     addConsoleEntry('outgoing', 'WebSocket Connected', { userId, sessionId, url: ws_url, glossaryEntries: getGlossary().length }, '🔌', 'system');
@@ -320,6 +339,13 @@ function connectWebsocket() {
 
   websocket.onmessage = function (event) {
     const serverMsg = JSON.parse(event.data);
+
+    // Handle ready signal from server (warmup complete)
+    if (serverMsg.ready) {
+      onServerReady();
+      addConsoleEntry('incoming', 'Session Ready', { status: 'Warmup complete' }, '✅', 'system');
+      return;
+    }
 
     // Console logging
     let eventSummary = 'Event';
@@ -537,14 +563,17 @@ function connectWebsocket() {
   };
 
   websocket.onclose = function () {
-    updateConnectionStatus(false);
-    addSystemMessage("Connection closed. Reconnecting in 5 seconds...");
+    updateConnectionStatus("disconnected");
+    serverReady = false;
+    startAudioButton.disabled = true;
+    pttToggle.disabled = true;
+    showConnectingMessage();
     addConsoleEntry('error', 'WebSocket Disconnected', { status: 'Connection closed', reconnecting: true }, '🔌', 'system');
     setTimeout(() => { connectWebsocket(); }, 5000);
   };
 
   websocket.onerror = function (e) {
-    updateConnectionStatus(false);
+    updateConnectionStatus("disconnected");
     addConsoleEntry('error', 'WebSocket Error', { error: e.type }, '⚠️', 'system');
   };
 }
@@ -552,6 +581,10 @@ connectWebsocket();
 
 function reconnectWithNewLanguage() {
   sessionId = "demo-session-" + Math.random().toString(36).substring(7);
+  serverReady = false;
+  updateConnectionStatus("connecting");
+  startAudioButton.disabled = true;
+  pttToggle.disabled = true;
   if (websocket) {
     websocket.onclose = null;
     websocket.close();
@@ -614,38 +647,23 @@ function getLanguageNames() {
   return { src, tgt };
 }
 
-let warmupInterval = null;
+let pendingReadyAction = null;
 
-function cancelWarmupCountdown() {
-  if (warmupInterval) {
-    clearInterval(warmupInterval);
-    warmupInterval = null;
+function onServerReady() {
+  serverReady = true;
+  updateConnectionStatus("connected");
+  if (connectingMsgDiv) {
+    connectingMsgDiv.remove();
+    connectingMsgDiv = null;
   }
-}
-
-function showWarmupCountdown(onComplete) {
-  cancelWarmupCountdown();
-  const total = 5;
-  const msgDiv = document.createElement("div");
-  msgDiv.className = "system-message";
-  msgDiv.textContent = `Starting in ${total} seconds...`;
-  messagesDiv.appendChild(msgDiv);
-  scrollToBottom();
-
-  let remaining = total - 1;
-  warmupInterval = setInterval(() => {
-    if (remaining > 0) {
-      msgDiv.textContent = `Starting in ${remaining} second${remaining > 1 ? "s" : ""}...`;
-      remaining--;
-    } else {
-      clearInterval(warmupInterval);
-      warmupInterval = null;
-      msgDiv.remove();
-      const { src, tgt } = getLanguageNames();
-      addSystemMessage(`Ready for ${src} to ${tgt} translation`);
-      onComplete();
-    }
-  }, 1000);
+  const { src, tgt } = getLanguageNames();
+  addSystemMessage(`Ready for ${src} to ${tgt} translation`);
+  if (!is_audio) startAudioButton.disabled = false;
+  pttToggle.disabled = false;
+  if (pendingReadyAction) {
+    pendingReadyAction();
+    pendingReadyAction = null;
+  }
 }
 
 // Always-on mode: click Start
@@ -654,7 +672,6 @@ startAudioButton.addEventListener("click", () => {
   startAudioButton.disabled = true;
   initAudioIfNeeded();
   is_audio = true;
-  showWarmupCountdown(() => {});
 });
 
 // PTT toggle
@@ -667,21 +684,25 @@ pttToggle.addEventListener("change", () => {
       startAudioButton.textContent = "Hold to Talk";
       initAudioIfNeeded();
       is_audio = true;
-      showWarmupCountdown(() => {
+      if (!serverReady) {
+        pendingReadyAction = () => {
+          is_audio = false;
+          startAudioButton.disabled = false;
+        };
+      } else {
         is_audio = false;
         startAudioButton.disabled = false;
-      });
+      }
     } else {
       startAudioButton.disabled = false;
       startAudioButton.textContent = "Hold to Talk";
       is_audio = false;
     }
   } else {
-    cancelWarmupCountdown();
+    pendingReadyAction = null;
     startAudioButton.classList.remove("ptt-mode");
     startAudioButton.classList.remove("ptt-active");
     startAudioButton.textContent = "Start";
-    startAudioButton.disabled = false;
     is_audio = false;
     audioInitialized = false;
     reconnectWithNewLanguage();

@@ -38,6 +38,7 @@ from translator_agent import (  # noqa: E402
 )
 
 MAX_GLOSSARY_ENTRIES = 1000  # safety cap on per-session glossary length
+_WARMUP_PCM = (Path(__file__).parent / "warmup.pcm").read_bytes()
 SETUP_TIMEOUT_SEC = 5  # how long to wait for the client's setup message
 AUTHOR = "live_translator"  # constant author tag echoed in every server frame
 RESUME_TTL_SEC = 900  # local eviction buffer; Live API has the real ~10min window
@@ -241,29 +242,92 @@ async def websocket_endpoint(
         glossary_entries if glossary_entries is not None else load_default_glossary()
     )
 
-    async def _warmup_resumed_session(session) -> None:
-        """Send a short silence to flush any replayed output from session resumption.
+    async def _warmup_session(session) -> None:
+        """Send a short speech clip to force a full model turn, then discard the output.
 
-        After resuming, the model sometimes re-emits the previous turn's
-        translation.  By sending ~1s of silence and draining until turnComplete,
-        we absorb that replay before real audio flows through.
+        This primes the model so it responds immediately to real audio, and
+        on resumed sessions it flushes the replayed previous-turn translation
+        that session resumption sometimes re-emits.
         """
-        silence = b"\x00" * 32000  # 1s of silence at 16kHz mono 16-bit
-        await session.send_realtime_input(
-            audio=types.Blob(mime_type="audio/pcm;rate=16000", data=silence)
+        t0 = time.monotonic()
+        model_responded = False
+        max_attempts = 5
+
+        for attempt in range(1, max_attempts + 1):
+            logger.debug("Warm-up attempt %d/%d", attempt, max_attempts)
+            await session.send_realtime_input(
+                audio=types.Blob(
+                    mime_type="audio/pcm;rate=16000", data=_WARMUP_PCM
+                )
+            )
+            await asyncio.sleep(0.1)
+            await session.send_realtime_input(
+                audio=types.Blob(
+                    mime_type="audio/pcm;rate=16000",
+                    data=b"\x00" * 48000,
+                )
+            )
+            try:
+                async with asyncio.timeout(3):
+                    async for msg in session.receive():
+                        update = msg.session_resumption_update
+                        if update and update.resumable and update.new_handle:
+                            _resume_handle_put(session_id, update.new_handle)
+                        sc = msg.server_content
+                        if sc:
+                            if (
+                                not model_responded
+                                and sc.model_turn
+                                and sc.model_turn.parts
+                            ):
+                                for p in sc.model_turn.parts:
+                                    if (
+                                        p.inline_data
+                                        and p.inline_data.data
+                                        and len(p.inline_data.data) > 0
+                                    ):
+                                        model_responded = True
+                                        logger.debug(
+                                            "Warm-up: model responded in %.1fs"
+                                            " (attempt %d)",
+                                            time.monotonic() - t0,
+                                            attempt,
+                                        )
+                                        await websocket.send_text(
+                                            json.dumps(
+                                                {
+                                                    "author": AUTHOR,
+                                                    "ready": True,
+                                                }
+                                            )
+                                        )
+                                        break
+                            if sc.turn_complete:
+                                logger.debug(
+                                    "Warm-up turn complete in %.1fs",
+                                    time.monotonic() - t0,
+                                )
+                                if not model_responded:
+                                    continue
+                                return
+            except TimeoutError:
+                logger.debug(
+                    "Warm-up attempt %d timed out after 3s", attempt
+                )
+                continue
+
+            if model_responded:
+                return
+
+        logger.debug(
+            "Warm-up: no response after %d attempts (%.1fs); proceeding",
+            max_attempts,
+            time.monotonic() - t0,
         )
-        try:
-            async with asyncio.timeout(5):
-                async for msg in session.receive():
-                    update = msg.session_resumption_update
-                    if update and update.resumable and update.new_handle:
-                        _resume_handle_put(session_id, update.new_handle)
-                    sc = msg.server_content
-                    if sc and sc.turn_complete:
-                        logger.debug("Warm-up turn complete; session is clean")
-                        return
-        except TimeoutError:
-            logger.debug("Warm-up timed out; proceeding anyway")
+        if not model_responded:
+            await websocket.send_text(
+                json.dumps({"author": AUTHOR, "ready": True})
+            )
 
     # Shared state between the upstream forwarder and the session loop. The
     # forwarder has the lifetime of the browser WebSocket and writes to whichever
@@ -321,8 +385,7 @@ async def websocket_endpoint(
             )
             try:
                 async with client.aio.live.connect(model=MODEL, config=config) as session:
-                    if prior_handle:
-                        await _warmup_resumed_session(session)
+                    await _warmup_session(session)
                     current_session = session
                     try:
                         go_away_event = asyncio.Event()

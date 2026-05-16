@@ -201,6 +201,10 @@ h1 {
   background-color: #34a853;
 }
 
+.status-indicator.connecting {
+  background-color: #fbbc04;
+}
+
 .status-indicator.disconnected {
   background-color: #ea4335;
 }
@@ -504,6 +508,11 @@ button {
   font-size: 0.8rem;
   color: #5f6368;
   white-space: nowrap;
+}
+
+.ptt-toggle:has(input:disabled) {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 /* System Messages */
