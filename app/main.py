@@ -159,8 +159,6 @@ def _envelope_from(msg: types.LiveServerMessage) -> dict | None:
     if sc:
         if sc.turn_complete:
             out["turnComplete"] = True
-        if sc.interrupted:
-            out["interrupted"] = True
         if sc.input_transcription:
             out["inputTranscription"] = {
                 "text": sc.input_transcription.text or "",

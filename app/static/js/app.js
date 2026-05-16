@@ -355,9 +355,6 @@ function connectWebsocket() {
     if (serverMsg.turnComplete) {
       eventSummary = 'Turn Complete';
       eventEmoji = '✅';
-    } else if (serverMsg.interrupted) {
-      eventSummary = 'Interrupted';
-      eventEmoji = '⏸️';
     } else if (serverMsg.inputTranscription) {
       const t = serverMsg.inputTranscription.text || '';
       eventSummary = `Input: "${t.length > 60 ? t.substring(0, 60) + '...' : t}"`;
@@ -417,30 +414,6 @@ function connectWebsocket() {
       return;
     }
 
-    // Handle interrupted
-    if (serverMsg.interrupted === true) {
-      if (audioPlayerNode) {
-        audioPlayerNode.port.postMessage({ command: "endOfAudio" });
-      }
-      if (currentBubbleElement) {
-        const ti = currentBubbleElement.querySelector(".typing-indicator");
-        if (ti) ti.remove();
-        currentBubbleElement.classList.add("interrupted");
-      }
-      if (currentOutputTranscriptionElement) {
-        const ti = currentOutputTranscriptionElement.querySelector(".typing-indicator");
-        if (ti) ti.remove();
-        currentOutputTranscriptionElement.classList.add("interrupted");
-      }
-      currentMessageId = null;
-      currentBubbleElement = null;
-      currentOutputTranscriptionId = null;
-      currentOutputTranscriptionElement = null;
-      currentOutputRawText = "";
-      inputTranscriptionFinished = false;
-      hasOutputTranscriptionInTurn = false;
-      return;
-    }
 
     // Handle input transcription (user's spoken words)
     if (serverMsg.inputTranscription && serverMsg.inputTranscription.text) {

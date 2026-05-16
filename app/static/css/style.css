@@ -302,21 +302,6 @@ h1 {
   font-size: 1.5rem;
 }
 
-/* Interrupted message */
-.message.interrupted .bubble {
-  opacity: 0.6;
-  background-color: #e8eaed;
-  border-left: 3px solid #f4b400;
-}
-
-.message.interrupted .bubble::after {
-  content: 'interrupted';
-  display: block;
-  font-size: 0.75rem;
-  color: #5f6368;
-  font-style: italic;
-  margin-top: 0.25rem;
-}
 
 /* Transcription styling */
 .message.transcription.user .bubble {
