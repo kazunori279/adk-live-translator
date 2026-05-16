@@ -61,6 +61,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex: 1;
 }
 
 .custom-select {
@@ -428,6 +429,74 @@ button {
   color: #80868b;
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+#startAudioButton.ptt-mode {
+  background-color: var(--primary-color);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#startAudioButton.ptt-mode:hover:not(:disabled) {
+  background-color: #3367d6;
+}
+
+#startAudioButton.ptt-active {
+  background-color: #e53935;
+  transform: scale(1.05);
+  box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.25);
+}
+
+/* PTT toggle switch */
+.ptt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.ptt-toggle input {
+  display: none;
+}
+
+.ptt-slider {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #dadce0;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.ptt-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.ptt-toggle input:checked + .ptt-slider {
+  background: var(--primary-color);
+}
+
+.ptt-toggle input:checked + .ptt-slider::after {
+  transform: translateX(16px);
+}
+
+.ptt-label {
+  font-size: 0.8rem;
+  color: #5f6368;
+  white-space: nowrap;
 }
 
 /* System Messages */

@@ -10,6 +10,8 @@ const userId = "demo-user";
 let sessionId = "demo-session-" + Math.random().toString(36).substring(7);
 let websocket = null;
 let is_audio = false;
+let pttMode = false;
+let audioInitialized = false;
 
 const sourceLangSelect = document.getElementById("sourceLang");
 const targetLangSelect = document.getElementById("targetLang");
@@ -597,12 +599,90 @@ function startAudio() {
 }
 
 const startAudioButton = document.getElementById("startAudioButton");
-startAudioButton.addEventListener("click", () => {
-  startAudioButton.disabled = true;
+const pttToggle = document.getElementById("pttToggle");
+
+function initAudioIfNeeded() {
+  if (audioInitialized) return;
+  audioInitialized = true;
   startAudio();
+  addConsoleEntry('outgoing', 'Audio Mode Enabled', { status: 'Microphone active' }, '🎤', 'system');
+}
+
+// Always-on mode: click Start
+startAudioButton.addEventListener("click", () => {
+  if (pttMode) return;
+  startAudioButton.disabled = true;
+  initAudioIfNeeded();
   is_audio = true;
   addSystemMessage("Audio mode enabled - speak to translate in real-time");
-  addConsoleEntry('outgoing', 'Audio Mode Enabled', { status: 'Microphone active' }, '🎤', 'system');
+});
+
+// PTT toggle
+pttToggle.addEventListener("change", () => {
+  pttMode = pttToggle.checked;
+  if (pttMode) {
+    startAudioButton.classList.add("ptt-mode");
+    startAudioButton.disabled = false;
+    startAudioButton.textContent = "Hold to Talk";
+    if (audioInitialized) is_audio = false;
+  } else {
+    startAudioButton.classList.remove("ptt-mode");
+    startAudioButton.classList.remove("ptt-active");
+    if (audioInitialized) {
+      startAudioButton.disabled = true;
+      startAudioButton.textContent = "Start";
+      is_audio = true;
+    } else {
+      startAudioButton.textContent = "Start";
+    }
+  }
+});
+
+// PTT hold handlers
+function pttDown(e) {
+  if (!pttMode || startAudioButton.disabled && !pttMode) return;
+  e.preventDefault();
+  if (pttTailTimeout) { clearTimeout(pttTailTimeout); pttTailTimeout = null; }
+  initAudioIfNeeded();
+  is_audio = true;
+  startAudioButton.classList.add("ptt-active");
+  startAudioButton.textContent = "Talking...";
+}
+
+let pttTailTimeout = null;
+
+function pttUp() {
+  if (!pttMode) return;
+  startAudioButton.classList.remove("ptt-active");
+  startAudioButton.textContent = "Hold to Talk";
+  if (pttTailTimeout) clearTimeout(pttTailTimeout);
+  pttTailTimeout = setTimeout(() => {
+    is_audio = false;
+    pttTailTimeout = null;
+  }, 1500);
+}
+
+startAudioButton.addEventListener("mousedown", pttDown);
+startAudioButton.addEventListener("mouseup", pttUp);
+startAudioButton.addEventListener("mouseleave", pttUp);
+startAudioButton.addEventListener("touchstart", pttDown);
+startAudioButton.addEventListener("touchend", pttUp);
+startAudioButton.addEventListener("touchcancel", pttUp);
+
+// Spacebar shortcut for PTT
+document.addEventListener("keydown", (e) => {
+  if (!pttMode || e.repeat) return;
+  if (e.code === "Space" && !e.target.matches("input, textarea, select, button:not(#startAudioButton)")) {
+    e.preventDefault();
+    pttDown(e);
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (!pttMode) return;
+  if (e.code === "Space" && !e.target.matches("input, textarea, select")) {
+    e.preventDefault();
+    pttUp();
+  }
 });
 
 function audioRecorderHandler(pcmData) {
