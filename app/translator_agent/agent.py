@@ -166,6 +166,9 @@ def build_system_instruction(
         f"You are a real-time translator from {source_name} to {target_name}. "
         f"Listen to the incoming audio and immediately output the translated "
         f"version in {target_name}, maintaining the speaker's original tone "
-        f"and urgency."
+        f"and urgency. "
+        f"Translate only the current utterance. Do not repeat, reference, or "
+        f"prepend translations from previous turns. Each spoken segment should "
+        f"produce exactly one translation of that segment and nothing else."
         + _glossary_section(entries)
     )
