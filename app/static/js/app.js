@@ -136,6 +136,7 @@ let currentMessageId = null;
 let currentBubbleElement = null;
 let currentInputTranscriptionId = null;
 let currentInputTranscriptionElement = null;
+let currentInputRawText = "";
 let currentOutputTranscriptionId = null;
 let currentOutputTranscriptionElement = null;
 let currentOutputRawText = "";
@@ -258,6 +259,9 @@ function connectWebsocket() {
       }
       currentMessageId = null;
       currentBubbleElement = null;
+      currentInputTranscriptionId = null;
+      currentInputTranscriptionElement = null;
+      currentInputRawText = "";
       currentOutputTranscriptionId = null;
       currentOutputTranscriptionElement = null;
       currentOutputRawText = "";
@@ -271,31 +275,27 @@ function connectWebsocket() {
       const transcriptionText = serverMsg.inputTranscription.text;
       const isFinished = serverMsg.inputTranscription.finished;
 
-      if (transcriptionText) {
-        if (inputTranscriptionFinished) return;
-
+      if (transcriptionText && !inputTranscriptionFinished) {
         if (currentInputTranscriptionId == null) {
           currentInputTranscriptionId = Math.random().toString(36).substring(7);
-          const cleanedText = cleanCJKSpaces(transcriptionText);
-          currentInputTranscriptionElement = createMessageBubble(cleanedText, true, !isFinished);
+          currentInputRawText = transcriptionText;
+          currentInputTranscriptionElement = createMessageBubble(cleanCJKSpaces(currentInputRawText), true, !isFinished);
           currentInputTranscriptionElement.id = currentInputTranscriptionId;
           currentInputTranscriptionElement.classList.add("transcription");
           messagesDiv.appendChild(currentInputTranscriptionElement);
         } else {
-          if (currentOutputTranscriptionId == null && currentMessageId == null) {
-            if (isFinished) {
-              updateMessageBubble(currentInputTranscriptionElement, cleanCJKSpaces(transcriptionText), false);
-            } else {
-              const existingText = currentInputTranscriptionElement.querySelector(".bubble-text").textContent;
-              const cleanText = existingText.replace(/\.\.\.$/, '');
-              updateMessageBubble(currentInputTranscriptionElement, cleanCJKSpaces(cleanText + transcriptionText), true);
-            }
+          if (isFinished) {
+            currentInputRawText = transcriptionText;
+          } else {
+            currentInputRawText += transcriptionText;
           }
+          updateMessageBubble(currentInputTranscriptionElement, cleanCJKSpaces(currentInputRawText), !isFinished);
         }
 
         if (isFinished) {
           currentInputTranscriptionId = null;
           currentInputTranscriptionElement = null;
+          currentInputRawText = "";
           inputTranscriptionFinished = true;
         }
         scrollToBottom();
@@ -309,15 +309,6 @@ function connectWebsocket() {
       hasOutputTranscriptionInTurn = true;
 
       if (transcriptionText) {
-        if (currentInputTranscriptionId != null && currentOutputTranscriptionId == null) {
-          const textElement = currentInputTranscriptionElement.querySelector(".bubble-text");
-          const typingIndicator = textElement.querySelector(".typing-indicator");
-          if (typingIndicator) typingIndicator.remove();
-          currentInputTranscriptionId = null;
-          currentInputTranscriptionElement = null;
-          inputTranscriptionFinished = true;
-        }
-
         if (currentOutputTranscriptionId == null) {
           currentOutputTranscriptionId = Math.random().toString(36).substring(7);
           currentOutputRawText = transcriptionText;
@@ -347,15 +338,6 @@ function connectWebsocket() {
     // Handle content events (text or audio)
     if (serverMsg.content && serverMsg.content.parts) {
       const parts = serverMsg.content.parts;
-
-      if (currentInputTranscriptionId != null && currentMessageId == null && currentOutputTranscriptionId == null) {
-        const textElement = currentInputTranscriptionElement.querySelector(".bubble-text");
-        const typingIndicator = textElement.querySelector(".typing-indicator");
-        if (typingIndicator) typingIndicator.remove();
-        currentInputTranscriptionId = null;
-        currentInputTranscriptionElement = null;
-        inputTranscriptionFinished = true;
-      }
 
       for (const part of parts) {
         if (part.inlineData) {
