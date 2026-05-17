@@ -669,102 +669,116 @@ async def main():
     ssl_ctx = None
     if ws_url.startswith("wss://"):
         ssl_ctx = ssl.create_default_context(cafile=certifi.where())
-    async with websockets.connect(ws_url, ssl=ssl_ctx) as ws:
+
+    async def connect_ws():
+        ws = await websockets.connect(ws_url, ssl=ssl_ctx)
         await ws.send(json.dumps({"glossary": TEST_GLOSSARY}))
         print(f"[{stamp()}] Connected, setup sent with glossary")
+        return ws
 
-        while time.monotonic() - start < args.duration:
-            stats.iterations += 1
+    ws = await connect_ws()
 
-            # Alternate: every 3rd iteration is a glossary test
-            glossary_entry = None
-            if stats.iterations % 3 == 0:
-                gi = next(glossary_cycle, None)
-                if gi is None:
-                    glossary_cycle = iter(range(len(TEST_GLOSSARY)))
-                    gi = next(glossary_cycle)
-                glossary_entry = TEST_GLOSSARY[gi]
+    while time.monotonic() - start < args.duration:
+        stats.iterations += 1
 
-            result = await run_iteration(
-                ws, genai_client, tts_client, stt_client,
-                stats.iterations, args.source, args.target,
-                glossary_entry=glossary_entry,
-            )
-            stats.results.append(result)
+        # Alternate: every 3rd iteration is a glossary test
+        glossary_entry = None
+        if stats.iterations % 3 == 0:
+            gi = next(glossary_cycle, None)
+            if gi is None:
+                glossary_cycle = iter(range(len(TEST_GLOSSARY)))
+                gi = next(glossary_cycle)
+            glossary_entry = TEST_GLOSSARY[gi]
 
-            log_file.write(json.dumps({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "iteration": result.index,
-                "original": result.original,
-                "input_transcription": result.input_transcription,
-                "output_transcription": result.output_transcription,
-                "stt_transcription": result.stt_transcription,
-                "passed": result.passed,
-                "score": result.score,
-                "reason": result.reason or None,
-                "error": result.error,
-                "elapsed_sec": round(result.elapsed, 2),
-                "first_response_sec": round(result.first_response_sec, 2) if result.first_response_sec is not None else None,
-                "turn_complete_sec": round(result.turn_complete_sec, 2) if result.turn_complete_sec is not None else None,
-                "glossary_term": result.glossary_term,
-                "glossary_found": result.glossary_found,
-                "input_transcription_score": result.input_transcription_score,
-                "output_transcription_score": result.output_transcription_score,
-            }, ensure_ascii=False) + "\n")
-            log_file.flush()
+        result = await run_iteration(
+            ws, genai_client, tts_client, stt_client,
+            stats.iterations, args.source, args.target,
+            glossary_entry=glossary_entry,
+        )
 
-            # Latency stats (based on turn_complete — user-perceived latency)
-            if result.turn_complete_sec is not None:
-                if result.turn_complete_sec <= LATENCY_THRESHOLD:
-                    stats.latency_ok += 1
-                else:
-                    stats.latency_slow += 1
+        if result.error and "ws closed" in result.error:
+            print(f"[{stamp()}] WebSocket closed, reconnecting...")
+            try:
+                ws = await connect_ws()
+            except Exception as e:
+                print(f"[{stamp()}] Reconnect failed: {e}")
+                await asyncio.sleep(2)
+                continue
+        stats.results.append(result)
 
-            # Glossary stats
-            if result.glossary_found is not None:
-                stats.glossary_checked += 1
-                if result.glossary_found:
-                    stats.glossary_found += 1
+        log_file.write(json.dumps({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "iteration": result.index,
+            "original": result.original,
+            "input_transcription": result.input_transcription,
+            "output_transcription": result.output_transcription,
+            "stt_transcription": result.stt_transcription,
+            "passed": result.passed,
+            "score": result.score,
+            "reason": result.reason or None,
+            "error": result.error,
+            "elapsed_sec": round(result.elapsed, 2),
+            "first_response_sec": round(result.first_response_sec, 2) if result.first_response_sec is not None else None,
+            "turn_complete_sec": round(result.turn_complete_sec, 2) if result.turn_complete_sec is not None else None,
+            "glossary_term": result.glossary_term,
+            "glossary_found": result.glossary_found,
+            "input_transcription_score": result.input_transcription_score,
+            "output_transcription_score": result.output_transcription_score,
+        }, ensure_ascii=False) + "\n")
+        log_file.flush()
 
-            # Transcription quality stats
-            if result.input_transcription_score is not None:
-                stats.input_transcription_scores.append(result.input_transcription_score)
-            if result.output_transcription_score is not None:
-                stats.output_transcription_scores.append(result.output_transcription_score)
-
-            latency_tag, glossary_tag, tx_tag, display = _format_tags(result)
-
-            if result.error:
-                stats.errors += 1
-                line = (
-                    f"[{stamp()}] #{result.index} ERROR ({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "
-                    f'"{result.original[:50]}" | {result.error}'
-                )
-            elif result.passed:
-                stats.passed += 1
-                stats.total_score += result.score
-                line = (
-                    f"[{stamp()}] #{result.index} PASS ({result.score:.0f}/10) "
-                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "{result.original[:50]}" -> "{display}"'
-                )
+        # Latency stats (based on turn_complete — user-perceived latency)
+        if result.turn_complete_sec is not None:
+            if result.turn_complete_sec <= LATENCY_THRESHOLD:
+                stats.latency_ok += 1
             else:
-                stats.failed += 1
-                stats.total_score += result.score
-                line = (
-                    f"[{stamp()}] #{result.index} FAIL ({result.score:.0f}/10) "
-                    f'({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "{result.original[:50]}" -> "{display}"'
-                    f" | {result.reason}"
-                )
-            print(line)
+                stats.latency_slow += 1
 
-            elapsed = time.monotonic() - start
-            remaining = args.duration - elapsed
-            if remaining > 0:
-                print(
-                    f"         [{elapsed:.0f}s / {args.duration}s elapsed, "
-                    f"{remaining:.0f}s remaining]",
-                    flush=True,
-                )
+        # Glossary stats
+        if result.glossary_found is not None:
+            stats.glossary_checked += 1
+            if result.glossary_found:
+                stats.glossary_found += 1
+
+        # Transcription quality stats
+        if result.input_transcription_score is not None:
+            stats.input_transcription_scores.append(result.input_transcription_score)
+        if result.output_transcription_score is not None:
+            stats.output_transcription_scores.append(result.output_transcription_score)
+
+        latency_tag, glossary_tag, tx_tag, display = _format_tags(result)
+
+        if result.error:
+            stats.errors += 1
+            line = (
+                f"[{stamp()}] #{result.index} ERROR ({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "
+                f'"{result.original[:50]}" | {result.error}'
+            )
+        elif result.passed:
+            stats.passed += 1
+            stats.total_score += result.score
+            line = (
+                f"[{stamp()}] #{result.index} PASS ({result.score:.0f}/10) "
+                f'({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "{result.original[:50]}" -> "{display}"'
+            )
+        else:
+            stats.failed += 1
+            stats.total_score += result.score
+            line = (
+                f"[{stamp()}] #{result.index} FAIL ({result.score:.0f}/10) "
+                f'({result.elapsed:.1f}s){latency_tag}{glossary_tag}{tx_tag} | "{result.original[:50]}" -> "{display}"'
+                f" | {result.reason}"
+            )
+        print(line)
+
+        elapsed = time.monotonic() - start
+        remaining = args.duration - elapsed
+        if remaining > 0:
+            print(
+                f"         [{elapsed:.0f}s / {args.duration}s elapsed, "
+                f"{remaining:.0f}s remaining]",
+                flush=True,
+            )
 
     # Summary
     elapsed = time.monotonic() - start
