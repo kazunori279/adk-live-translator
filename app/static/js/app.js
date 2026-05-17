@@ -16,6 +16,27 @@ let audioInitialized = false;
 const sourceLangSelect = document.getElementById("sourceLang");
 const targetLangSelect = document.getElementById("targetLang");
 
+// Hide subtitle when it would overlap controls or when header wraps
+{
+  const subtitle = document.querySelector(".subtitle");
+  const controls = document.querySelector(".header-controls");
+  const titleEl = document.querySelector("header h1");
+  if (subtitle && controls && titleEl) {
+    const check = () => {
+      subtitle.hidden = false;
+      const sr = subtitle.getBoundingClientRect();
+      const cr = controls.getBoundingClientRect();
+      const tr = titleEl.getBoundingClientRect();
+      const overlaps = sr.top < cr.bottom && sr.bottom > cr.top && sr.right > cr.left;
+      const headerWrapped = cr.top > tr.bottom - 4;
+      const subtitleWraps = sr.bottom > tr.bottom + 4;
+      subtitle.hidden = overlaps || headerWrapped || subtitleWraps;
+    };
+    requestAnimationFrame(check);
+    window.addEventListener("resize", check);
+  }
+}
+
 // Custom dropdown logic
 function setupCustomSelect(hiddenInput, trigger, dropdown, defaultCode, languages, popular, allCodes) {
   dropdown.innerHTML = "";
@@ -111,9 +132,6 @@ function getWebSocketUrl() {
 const messagesDiv = document.getElementById("messages");
 const statusIndicator = document.getElementById("statusIndicator");
 const statusText = document.getElementById("statusText");
-const consoleContent = document.getElementById("consoleContent");
-const clearConsoleBtn = document.getElementById("clearConsole");
-const showAudioEventsCheckbox = document.getElementById("showAudioEvents");
 let currentMessageId = null;
 let currentBubbleElement = null;
 let currentInputTranscriptionId = null;
@@ -138,100 +156,6 @@ function cleanCJKSpaces(text) {
     return match;
   });
 }
-
-// Console logging
-function formatTimestamp() {
-  const now = new Date();
-  return now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
-}
-
-function addConsoleEntry(type, content, data = null, emoji = null, author = null, isAudio = false) {
-  if (isAudio && !showAudioEventsCheckbox.checked) return;
-
-  const entry = document.createElement("div");
-  entry.className = `console-entry ${type}`;
-
-  const header = document.createElement("div");
-  header.className = "console-entry-header";
-
-  const leftSection = document.createElement("div");
-  leftSection.className = "console-entry-left";
-
-  if (emoji) {
-    const emojiIcon = document.createElement("span");
-    emojiIcon.className = "console-entry-emoji";
-    emojiIcon.textContent = emoji;
-    leftSection.appendChild(emojiIcon);
-  }
-
-  const expandIcon = document.createElement("span");
-  expandIcon.className = "console-expand-icon";
-  expandIcon.textContent = data ? "▶" : "";
-
-  const typeLabel = document.createElement("span");
-  typeLabel.className = "console-entry-type";
-  typeLabel.textContent = type === 'outgoing' ? '↑ Upstream' : type === 'incoming' ? '↓ Downstream' : '⚠ Error';
-
-  leftSection.appendChild(expandIcon);
-  leftSection.appendChild(typeLabel);
-
-  if (author) {
-    const authorBadge = document.createElement("span");
-    authorBadge.className = "console-entry-author";
-    authorBadge.textContent = author;
-    authorBadge.setAttribute('data-author', author);
-    leftSection.appendChild(authorBadge);
-  }
-
-  const timestamp = document.createElement("span");
-  timestamp.className = "console-entry-timestamp";
-  timestamp.textContent = formatTimestamp();
-
-  header.appendChild(leftSection);
-  header.appendChild(timestamp);
-
-  const contentDiv = document.createElement("div");
-  contentDiv.className = "console-entry-content";
-  contentDiv.textContent = content;
-
-  entry.appendChild(header);
-  entry.appendChild(contentDiv);
-
-  if (data) {
-    const jsonDiv = document.createElement("div");
-    jsonDiv.className = "console-entry-json collapsed";
-    const pre = document.createElement("pre");
-    pre.textContent = JSON.stringify(data, null, 2);
-    jsonDiv.appendChild(pre);
-    entry.appendChild(jsonDiv);
-
-    entry.classList.add("expandable");
-    entry.addEventListener("click", () => {
-      const isExpanded = !jsonDiv.classList.contains("collapsed");
-      if (isExpanded) {
-        jsonDiv.classList.add("collapsed");
-        expandIcon.textContent = "▶";
-        entry.classList.remove("expanded");
-      } else {
-        jsonDiv.classList.remove("collapsed");
-        expandIcon.textContent = "▼";
-        entry.classList.add("expanded");
-      }
-    });
-  }
-
-  consoleContent.appendChild(entry);
-  consoleContent.scrollTop = consoleContent.scrollHeight;
-}
-
-clearConsoleBtn.addEventListener('click', () => { consoleContent.innerHTML = ''; });
-
-const toggleConsoleBtn = document.getElementById("toggleConsole");
-const consolePanel = document.getElementById("consolePanel");
-toggleConsoleBtn.addEventListener('click', () => {
-  consolePanel.classList.toggle('hidden');
-  toggleConsoleBtn.classList.toggle('active');
-});
 
 function updateConnectionStatus(status) {
   if (status === "connected") {
@@ -297,20 +221,6 @@ function scrollToBottom() {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-function sanitizeEventForDisplay(event) {
-  const sanitized = JSON.parse(JSON.stringify(event));
-  if (sanitized.content && sanitized.content.parts) {
-    sanitized.content.parts = sanitized.content.parts.map(part => {
-      if (part.inlineData && part.inlineData.data) {
-        const byteSize = Math.floor(part.inlineData.data.length * 0.75);
-        return { ...part, inlineData: { ...part.inlineData, data: `(${byteSize.toLocaleString()} bytes)` } };
-      }
-      return part;
-    });
-  }
-  return sanitized;
-}
-
 // Connecting state (declared early — used inside connectWebsocket)
 let connectingMsgDiv = null;
 let serverReady = false;
@@ -334,7 +244,6 @@ function connectWebsocket() {
     updateConnectionStatus("connecting");
     // First message must be the setup payload (carries the per-browser glossary).
     websocket.send(JSON.stringify({ glossary: getGlossary() }));
-    addConsoleEntry('outgoing', 'WebSocket Connected', { userId, sessionId, url: ws_url, glossaryEntries: getGlossary().length }, '🔌', 'system');
   };
 
   websocket.onmessage = function (event) {
@@ -343,55 +252,7 @@ function connectWebsocket() {
     // Handle ready signal from server (warmup complete)
     if (serverMsg.ready) {
       onServerReady();
-      addConsoleEntry('incoming', 'Session Ready', { status: 'Warmup complete' }, '✅', 'system');
       return;
-    }
-
-    // Console logging
-    let eventSummary = 'Event';
-    let eventEmoji = '📨';
-    const author = serverMsg.author || 'system';
-
-    if (serverMsg.turnComplete) {
-      eventSummary = 'Turn Complete';
-      eventEmoji = '✅';
-    } else if (serverMsg.inputTranscription) {
-      const t = serverMsg.inputTranscription.text || '';
-      eventSummary = `Input: "${t.length > 60 ? t.substring(0, 60) + '...' : t}"`;
-      eventEmoji = '📝';
-    } else if (serverMsg.outputTranscription) {
-      const t = serverMsg.outputTranscription.text || '';
-      eventSummary = `Output: "${t.length > 60 ? t.substring(0, 60) + '...' : t}"`;
-      eventEmoji = '📝';
-    } else if (serverMsg.usageMetadata) {
-      const u = serverMsg.usageMetadata;
-      eventSummary = `Tokens: ${(u.totalTokenCount || 0).toLocaleString()} total`;
-      eventEmoji = '📊';
-    } else if (serverMsg.content && serverMsg.content.parts) {
-      const hasText = serverMsg.content.parts.some(p => p.text);
-      const hasAudio = serverMsg.content.parts.some(p => p.inlineData);
-
-      if (hasText) {
-        const textPart = serverMsg.content.parts.find(p => p.text);
-        const t = textPart?.text || '';
-        eventSummary = `Text: "${t.length > 80 ? t.substring(0, 80) + '...' : t}"`;
-        eventEmoji = '💭';
-      }
-
-      if (hasAudio) {
-        const audioPart = serverMsg.content.parts.find(p => p.inlineData);
-        const byteSize = Math.floor((audioPart?.inlineData?.data?.length || 0) * 0.75);
-        eventSummary = `Audio: ${byteSize.toLocaleString()} bytes`;
-        eventEmoji = '🔊';
-        addConsoleEntry('incoming', eventSummary, sanitizeEventForDisplay(serverMsg), eventEmoji, author, true);
-      }
-    }
-
-    const isAudioOnlyEvent = serverMsg.content && serverMsg.content.parts &&
-      serverMsg.content.parts.some(p => p.inlineData) &&
-      !serverMsg.content.parts.some(p => p.text);
-    if (!isAudioOnlyEvent) {
-      addConsoleEntry('incoming', eventSummary, sanitizeEventForDisplay(serverMsg), eventEmoji, author);
     }
 
     // Handle turn complete
@@ -541,13 +402,11 @@ function connectWebsocket() {
     startAudioButton.disabled = true;
     pttToggle.disabled = true;
     showConnectingMessage();
-    addConsoleEntry('error', 'WebSocket Disconnected', { status: 'Connection closed', reconnecting: true }, '🔌', 'system');
     setTimeout(() => { connectWebsocket(); }, 5000);
   };
 
   websocket.onerror = function (e) {
     updateConnectionStatus("disconnected");
-    addConsoleEntry('error', 'WebSocket Error', { error: e.type }, '⚠️', 'system');
   };
 }
 connectWebsocket();
@@ -613,7 +472,6 @@ function initAudioIfNeeded() {
   if (audioInitialized) return;
   audioInitialized = true;
   startAudio();
-  addConsoleEntry('outgoing', 'Audio Mode Enabled', { status: 'Microphone active' }, '🎤', 'system');
 }
 
 function getLanguageNames() {

@@ -343,6 +343,7 @@ async def websocket_endpoint(
     # and opens fresh ones (with the resumption handle) as the Live API expires
     # them, without ever closing the browser-facing WS.
     current_session: types.AsyncSession | None = None
+    user_audio_flowing = asyncio.Event()
 
     async def upstream_task() -> None:
         """Forward browser audio into whichever Live session is current."""
@@ -356,9 +357,6 @@ async def websocket_endpoint(
                     audio = message["bytes"]
                     sess = current_session
                     if sess is None:
-                        # No active session right now (between upstream
-                        # reconnects). Drop the chunk; resumption preserves
-                        # model context across the gap.
                         continue
                     try:
                         await sess.send_realtime_input(
@@ -366,8 +364,8 @@ async def websocket_endpoint(
                                 mime_type="audio/pcm;rate=16000", data=audio
                             )
                         )
+                        user_audio_flowing.set()
                     except Exception:  # noqa: BLE001
-                        # Session closed mid-send; drop and let the loop reopen.
                         pass
                 elif "text" in message:
                     logger.debug("Ignoring text message (audio-only)")
@@ -378,6 +376,7 @@ async def websocket_endpoint(
         """Open Gemini Live sessions in succession, resuming each via stored handle."""
         nonlocal current_session
         while True:
+            user_audio_flowing.clear()
             prior_handle = _resume_handle_get(session_id)
             config = types.LiveConnectConfig(
                 response_modalities=[types.Modality.AUDIO],
@@ -398,9 +397,11 @@ async def websocket_endpoint(
                     try:
                         go_away_event = asyncio.Event()
                         go_away_secs: float = 30
+                        post_warmup = True
 
                         async def _drain_session() -> None:
                             """Read from the Live session until it ends or GoAway deadline."""
+                            nonlocal post_warmup
                             while True:
                                 saw_message = False
                                 async for msg in session.receive():
@@ -433,6 +434,17 @@ async def websocket_endpoint(
                                     envelope = _envelope_from(msg)
                                     if envelope is None:
                                         continue
+                                    if post_warmup:
+                                        if user_audio_flowing.is_set() and "content" in envelope:
+                                            post_warmup = False
+                                        elif user_audio_flowing.is_set() and "inputTranscription" in envelope:
+                                            pass
+                                        else:
+                                            logger.debug(
+                                                "Discarding post-warmup stale: %s",
+                                                [k for k in envelope if k != "author"],
+                                            )
+                                            continue
                                     ot = envelope.get("outputTranscription")
                                     if ot and ot.get("text") and display_map:
                                         original = ot["text"]

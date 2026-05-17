@@ -12,12 +12,11 @@
     <header>
       <div class="title-row">
         <h1>Live Translator</h1>
-        <span class="subtitle">Real-time audio translation in 97 languages, powered by Gemini Live API</span>
+        <span class="subtitle">powered by Gemini Live API</span>
       </div>
       <div class="header-controls">
         <button id="openAudio" class="toggle-console-btn">Audio</button>
         <button id="openGlossary" class="toggle-console-btn">Glossary</button>
-        <button id="toggleConsole" class="toggle-console-btn">Console</button>
         <div class="connection-status">
           <span class="status-indicator connecting" id="statusIndicator"></span>
           <span id="statusText">Connecting...</span>
@@ -110,19 +109,6 @@
         </div>
       </div>
 
-      <div class="console-panel hidden" id="consolePanel">
-        <div class="console-header">
-          <h2>Event Console</h2>
-          <div class="console-controls">
-            <label class="console-checkbox">
-              <input type="checkbox" id="showAudioEvents">
-              <span>Show audio</span>
-            </label>
-            <button id="clearConsole" class="console-clear-btn">Clear</button>
-          </div>
-        </div>
-        <div id="consoleContent" class="console-content"></div>
-      </div>
     </div>
   </body>
 </html>
