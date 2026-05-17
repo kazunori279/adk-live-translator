@@ -108,6 +108,8 @@ FastAPI bridges one browser WebSocket to a series of Gemini Live API sessions. T
 
 **Wire format:** Each `LiveServerMessage` is translated into a camelCase JSON envelope the frontend understands (`turnComplete`, `inputTranscription`, `outputTranscription`, `content.parts[]`, `usageMetadata`).
 
+**Transcription behavior:** Output transcription (the translated speech) streams in multiple partial chunks, so the UI can show word-by-word updates with a typing indicator. Input transcription (the user's spoken words) arrives as a single message with the complete text — the API does not stream partial input transcriptions, so the user's bubble appears all at once.
+
 ### Model
 
 Uses `gemini-3.1-flash-live-preview` via the Gemini API (`generativelanguage.googleapis.com`). Audio input is 16 kHz mono PCM; output is 24 kHz PCM.
