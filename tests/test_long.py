@@ -793,11 +793,16 @@ async def main():
         f"({100 * stats.passed / stats.iterations:.1f}%) | "
         f"Avg score: {avg_score:.1f}/10 | Errors: {stats.errors}"
     )
+    scores = [r.score for r in stats.results if not r.error]
+    report.extend(_format_distribution("Translation Score", scores, [
+        ("0-2", 0.0, 2.5),
+        ("3-4", 2.5, 4.5),
+        ("5-6", 4.5, 6.5),
+        ("7-8", 6.5, 8.5),
+        ("9-10", 8.5, 10.1),
+    ]))
+
     if stats.glossary_checked:
-        report.append(
-            f"Glossary: {stats.glossary_found}/{stats.glossary_checked} "
-            f"({100 * stats.glossary_found / stats.glossary_checked:.1f}%) terms matched in output"
-        )
         glossary_scores = [r.score for r in stats.results if r.glossary_found is not None and not r.error]
         report.extend(_format_distribution("Glossary Iteration Score", glossary_scores, [
             ("0-2", 0.0, 2.5),
@@ -827,15 +832,6 @@ async def main():
         ("5-7s", 5.0, 7.0),
         ("7-10s", 7.0, 10.0),
         (">10s", 10.0, 1e9),
-    ]))
-
-    scores = [r.score for r in stats.results if not r.error]
-    report.extend(_format_distribution("Translation Score", scores, [
-        ("0-2", 0.0, 2.5),
-        ("3-4", 2.5, 4.5),
-        ("5-6", 4.5, 6.5),
-        ("7-8", 6.5, 8.5),
-        ("9-10", 8.5, 10.1),
     ]))
 
     report.extend(_format_distribution("Input Transcription Score", stats.input_transcription_scores, [

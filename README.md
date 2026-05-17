@@ -174,25 +174,70 @@ uv run python tests/test_long.py --url wss://YOUR_CLOUD_RUN_URL --duration 3600
 
 Options: `--url` (WebSocket base URL), `--duration` (seconds), `--source`/`--target` (language pair), `--log` (JSONL output path).
 
-#### Latest soak test results (1 hour, en → ja, Cloud Run)
+#### Latest soak test results (30 min, en → ja, Cloud Run)
 
 ```
-Duration: 3631s | Iterations: 185 | Passed: 178/185 (96.2%) | Avg score: 9.7/10
-Glossary: 34/61 (55.7%) terms matched in output
+Duration: 1801s | Iterations: 102 | Passed: 101/102 (99.0%) | Avg score: 9.8/10 | Errors: 0
 
-First Response (speech-end to first audio/transcript)
-  avg=0.05s  p50=0.00s  p90=0.09s  p99=2.25s
+  Translation Score (n=102)
+  min=3.00  avg=9.82  p50=10.00  p90=10.00  p99=10.00  max=10.00
+         0-2:    0 (  0.0%) 
+         3-4:    1 (  1.0%) 
+         5-6:    0 (  0.0%) 
+         7-8:    0 (  0.0%) 
+        9-10:  101 ( 99.0%) ##############################
 
-Turn Complete (speech-end to full translation)
-  avg=6.28s  p50=6.17s  p90=7.72s  p99=12.45s
+  Glossary Iteration Score (n=34)
+  min=10.00  avg=10.00  p50=10.00  p90=10.00  p99=10.00  max=10.00
+         0-2:    0 (  0.0%) 
+         3-4:    0 (  0.0%) 
+         5-6:    0 (  0.0%) 
+         7-8:    0 (  0.0%) 
+        9-10:   34 (100.0%) ##############################
 
-Translation Score
-  avg=9.66  p50=10.00  9-10: 95.7%
+  First Response (speech-end to first audio/transcript) (n=102)
+  min=0.00  avg=0.05  p50=0.00  p90=0.04  p99=0.89  max=2.52
+         =0s:   83 ( 81.4%) ##############################
+      0-0.1s:   13 ( 12.7%) ####
+    0.1-0.5s:    4 (  3.9%) #
+      0.5-1s:    1 (  1.0%) 
+        1-2s:    0 (  0.0%) 
+        2-5s:    1 (  1.0%) 
+         >5s:    0 (  0.0%) 
 
-Input Transcription Score
-  avg=9.96  p50=10.00  9-10: 99.5%
+  Turn Complete (speech-end to full translation) (n=102)
+  min=3.65  avg=5.39  p50=5.38  p90=6.65  p99=7.58  max=8.24
+         <2s:    0 (  0.0%) 
+        2-3s:    0 (  0.0%) 
+        3-4s:    8 (  7.8%) ###
+        4-5s:   25 ( 24.5%) ###########
+        5-7s:   64 ( 62.7%) ##############################
+       7-10s:    5 (  4.9%) ##
+        >10s:    0 (  0.0%) 
 
-Output Transcription Score
-  avg=9.41  p50=10.00  9-10: 88.0%
+  Input Transcription Score (n=102)
+  min=10.00  avg=10.00  p50=10.00  p90=10.00  p99=10.00  max=10.00
+         0-2:    0 (  0.0%) 
+         3-4:    0 (  0.0%) 
+         5-6:    0 (  0.0%) 
+         7-8:    0 (  0.0%) 
+        9-10:  102 (100.0%) ##############################
+
+  Output Transcription Score (n=102)
+  min=3.00  avg=9.37  p50=10.00  p90=10.00  p99=10.00  max=10.00
+         0-2:    0 (  0.0%) 
+         3-4:    1 (  1.0%) 
+         5-6:    3 (  2.9%) #
+         7-8:   12 ( 11.8%) ####
+        9-10:   86 ( 84.3%) ##############################
+
+  Total Iteration Time (n=102)
+  min=13.54  avg=17.67  p50=17.77  p90=19.88  p99=22.61  max=24.41
+        <10s:    0 (  0.0%) 
+      10-15s:   11 ( 10.8%) ####
+      15-20s:   82 ( 80.4%) ##############################
+      20-25s:    9 (  8.8%) ###
+      25-30s:    0 (  0.0%) 
+        >30s:    0 (  0.0%) 
 ```
 
