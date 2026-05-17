@@ -42,8 +42,7 @@ Open http://localhost:8000.
 
 ### Push to Talk
 
-Toggle **Push to Talk** on the right to switch from always-on to manual control. Hold the **Hold to Talk** button (or press spacebar) to transmit, release to stop. A 1.5s audio tail is sent after release so the model's VAD can detect end-of-speech.
-
+Toggle **Push to Talk** on the right to switch from always-on to manual control. Hold the **Hold to Talk** button (or press spacebar) to transmit, release to stop.
 ### Audio Settings
 
 Click **Audio** in the header to select which microphone and speaker to use. Choices are saved in your browser and applied on the next session.
@@ -71,11 +70,9 @@ Edit `app/dict.csv` and redeploy. Browsers with a cached glossary keep using it 
 ### Connection States
 
 The status indicator in the top-right corner shows:
-- **Yellow dot / Connecting...** — WebSocket connected, model warming up
+- **Yellow dot / Connecting...** — WebSocket connecting
 - **Green dot / Connected** — ready to translate
 - **Red dot / Disconnected** — connection lost, auto-reconnects in 5s
-
-The Start button and PTT toggle are disabled until the warmup completes.
 
 ---
 
