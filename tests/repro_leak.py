@@ -111,6 +111,7 @@ async def run_turn(
             except TimeoutError:
                 print("      (warmup timeout)")
 
+
         # Send all audio at once (model buffers it), then silence for VAD
         await session.send_realtime_input(
             audio=types.Blob(mime_type="audio/pcm;rate=16000", data=audio)

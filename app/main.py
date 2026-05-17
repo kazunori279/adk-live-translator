@@ -307,6 +307,16 @@ async def websocket_endpoint(
                                 )
                                 if not model_responded:
                                     continue
+                                # Drain late transcriptions that the Live API
+                                # sends asynchronously after turn_complete.
+                                try:
+                                    async with asyncio.timeout(1.0):
+                                        async for late in session.receive():
+                                            upd = late.session_resumption_update
+                                            if upd and upd.resumable and upd.new_handle:
+                                                _resume_handle_put(session_id, upd.new_handle)
+                                except TimeoutError:
+                                    pass
                                 return
             except TimeoutError:
                 logger.debug(
