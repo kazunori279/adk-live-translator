@@ -80,15 +80,42 @@ The status indicator in the top-right corner shows:
 
 ### Architecture
 
-```
-Browser                          Server (FastAPI)                 Gemini Live API
-  |                                  |                                |
-  |-- WebSocket /ws/{user}/{sid} --> |                                |
-  |   (binary PCM frames)           |-- client.aio.live.connect() -->|
-  |                                  |                                |
-  |                                  |<-- LiveServerMessage ---------|
-  |<-- JSON envelope --------------- |                                |
-  |   (transcription, audio, etc.)   |                                |
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant S as Server (FastAPI)
+    participant G as Gemini Live API
+
+    B->>S: WS /ws/{user}/{sid}?src&tgt
+    B->>S: JSON setup {glossary}
+    S->>G: live.connect(sysInstruction)
+    G-->>S: session ready
+
+    rect rgb(240, 248, 255)
+    note over B,G: Translation loop (repeat per utterance)
+    B->>S: binary PCM 16kHz
+    S->>G: send_realtime_input(audio)
+    G-->>S: inputTranscription
+    S-->>B: {inputTranscription}
+    G-->>S: outputTranscription (stream)
+    S-->>B: {outputTranscription}
+    G-->>S: model_turn audio chunk
+    S-->>B: {content.parts[inlineData]}
+    G-->>S: turn_complete
+    S-->>B: {turnComplete}
+    end
+
+    rect rgb(255, 248, 240)
+    note over S,G: GoAway — session cycling (~15 min)
+    G-->>S: GoAway (time_left=30s)
+    S->>G: live.connect() (pre-open)
+    note over S: drain old session
+    G-->>S: turn_complete (old)
+    note over S: switch to new session
+    end
+
+    B->>S: WS close
+    S->>G: session close
 ```
 
 FastAPI bridges one browser WebSocket to a series of Gemini Live API sessions. The browser WS lives for the lifetime of the user's tab; upstream Live sessions are opened, expire (~15 min), and reopened underneath it transparently.
