@@ -149,8 +149,7 @@ sequenceDiagram
     S-->>B: {outputTranscription} / {content}
     O-->>S: turn_complete
     S-->>B: {turnComplete}
-    note over S: old session done, switch to new
-    S-->>N: new session ready
+    note over S: old session done, switch to new session
     B->>S: binary PCM 16kHz
     S->>N: send_realtime_input(audio)
 ```
