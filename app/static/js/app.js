@@ -429,13 +429,14 @@ function startAudio() {
     audioPlayerNode = node;
     audioPlayerContext = ctx;
   });
-  const startingMsg = addSystemMessage("Starting audio. Please wait...");
+  const loadingOverlay = document.getElementById("loadingOverlay");
+  loadingOverlay.classList.remove("hidden");
   startAudioRecorderWorklet(audioRecorderHandler, inputId).then(([node, ctx, stream]) => {
     audioRecorderNode = node;
     audioRecorderContext = ctx;
     micStream = stream;
     setTimeout(() => {
-      if (startingMsg) startingMsg.remove();
+      loadingOverlay.classList.add("hidden");
       const { src, tgt } = getLanguageNames();
       addSystemMessage(`Ready for ${src} to ${tgt} translation`);
       if (pttMode) {
@@ -804,6 +805,11 @@ async function populateAudioDevices() {
   let devices;
   try {
     devices = await navigator.mediaDevices.enumerateDevices();
+    if (!devices.some(d => d.label)) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      devices = await navigator.mediaDevices.enumerateDevices();
+    }
   } catch {
     audioHint.textContent = "Could not enumerate audio devices.";
     return;
@@ -814,7 +820,7 @@ async function populateAudioDevices() {
   const hasLabels = inputs.some(d => d.label);
 
   audioHint.textContent = hasLabels
-    ? "Changes take effect on the next session."
+    ? ""
     : "Grant microphone permission to see device names.";
 
   const savedInput = getSavedInputDevice();
@@ -853,6 +859,24 @@ audioInputSelect.addEventListener("change", () => {
 
 audioOutputSelect.addEventListener("change", () => {
   setSavedOutputDevice(audioOutputSelect.value);
+});
+
+document.getElementById("applyAudio").addEventListener("click", async () => {
+  if (audioRecorderContext) {
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    await audioRecorderContext.close();
+    const [node, ctx, stream] = await startAudioRecorderWorklet(audioRecorderHandler, getSavedInputDevice());
+    audioRecorderNode = node;
+    audioRecorderContext = ctx;
+    micStream = stream;
+  }
+  if (audioPlayerContext) {
+    await audioPlayerContext.close();
+    const [node, ctx] = await startAudioPlayerWorklet(getSavedOutputDevice());
+    audioPlayerNode = node;
+    audioPlayerContext = ctx;
+  }
+  audioOverlay.classList.add("hidden");
 });
 
 document.getElementById("openAudio").addEventListener("click", async () => {

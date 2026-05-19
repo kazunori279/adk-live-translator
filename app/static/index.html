@@ -63,6 +63,15 @@
       </div>
     </div>
 
+    <div class="modal-overlay hidden" id="loadingOverlay">
+      <div class="modal loading-modal" role="dialog" aria-labelledby="loadingTitle">
+        <div class="modal-body loading-body">
+          <div class="loading-spinner"></div>
+          <p id="loadingText">Starting audio. Please wait...</p>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-overlay hidden" id="audioOverlay">
       <div class="modal" role="dialog" aria-labelledby="audioTitle">
         <div class="modal-header">
@@ -78,6 +87,9 @@
           <div class="audio-setting">
             <label for="audioOutputSelect">Speaker</label>
             <select id="audioOutputSelect"></select>
+          </div>
+          <div class="audio-actions">
+            <button id="applyAudio" type="button">Change Audio Settings</button>
           </div>
         </div>
       </div>
