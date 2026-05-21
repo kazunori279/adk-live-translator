@@ -160,6 +160,23 @@ sequenceDiagram
 
 Session resumption was intentionally removed — it caused an off-by-one translation cascade where the model would prepend the previous turn's translation to the current one. Without resumption, each session starts clean, which proved more reliable (98% pass rate vs 65% with resumption in 1-hour soak tests).
 
+### Gemini Live API Transient Errors and Recovery
+
+The Gemini Live API occasionally returns `1011 (service currently unavailable)` errors. In production logs, these occur roughly once per hour in two patterns:
+
+- **Mid-session kill** (~65% of cases): An active session is disconnected during `session.receive()`. The session was working, then Gemini drops it.
+- **Connect-time rejection** (~35% of cases): Gemini refuses to open a new session entirely. This typically follows a mid-session kill — the retry fails because Gemini is still recovering.
+
+These errors cascade: a mid-session kill triggers a retry, which may also get rejected, but the API typically recovers within 1–3 seconds.
+
+**Recovery logic in `session_loop`:**
+
+1. **Connect timeout** (`CONNECT_TIMEOUT_SEC = 10`): The `conn.__aenter__()` call has a hard timeout so a hanging connect fails fast instead of blocking indefinitely.
+2. **Exponential backoff**: Retries start at 0.2s and double on each consecutive failure, capping at 4s. The backoff resets after a successful session. This avoids thrashing the API while still recovering quickly from transient blips.
+3. **Transparent reconnect**: The browser WebSocket stays open during retries — only the upstream Gemini session is affected. Once a new session opens, `upstream_task` resumes forwarding audio to it automatically.
+
+For real users streaming from a microphone, recovery is seamless — the new session picks up the live audio stream with a brief gap of ~0.2–3s. For health checks that send a one-shot audio clip, the clip may be lost if the session dies before producing a response.
+
 ### SDK Note
 
 `app/main.py` clears `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_CLOUD_PROJECT`, and `GOOGLE_CLOUD_LOCATION` before constructing the genai client. These env vars cause the SDK to route through `aiplatform.googleapis.com`; clearing them forces Gemini API key routing via `generativelanguage.googleapis.com`.

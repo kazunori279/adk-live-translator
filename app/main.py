@@ -40,6 +40,9 @@ from translator_agent import (  # noqa: E402
 
 MAX_GLOSSARY_ENTRIES = 1000  # safety cap on per-session glossary length
 SETUP_TIMEOUT_SEC = 5  # how long to wait for the client's setup message
+CONNECT_TIMEOUT_SEC = 10
+RETRY_BACKOFF_INIT = 0.2
+RETRY_BACKOFF_MAX = 4.0
 AUTHOR = "live_translator"  # constant author tag echoed in every server frame
 
 def _build_display_map(
@@ -341,6 +344,7 @@ async def websocket_endpoint(
                 next_ready.clear()
                 asyncio.create_task(conn.__aexit__(None, None, None))
 
+        retry_backoff = RETRY_BACKOFF_INIT
         while True:
             conn = None
             open_next_task = None
@@ -359,17 +363,20 @@ async def websocket_endpoint(
                 else:
                     cfg = _build_config()
                     conn = client.aio.live.connect(model=active_model, config=cfg)
-                    session = await conn.__aenter__()
+                    session = await asyncio.wait_for(
+                        conn.__aenter__(), timeout=CONNECT_TIMEOUT_SEC
+                    )
                     logger.debug("Opened fresh Live session")
 
                 is_first_session = False
                 current_session = session
+                retry_backoff = RETRY_BACKOFF_INIT
 
                 go_away_event = asyncio.Event()
                 go_away_secs: float = 30
 
-                async def _drain_session() -> None:
-                    """Read from the Live session until it ends or GoAway deadline."""
+                async def _relay_session() -> None:
+                    """Forward Gemini messages to the browser until session ends."""
                     while True:
                         saw_message = False
                         async for msg in session.receive():
@@ -419,31 +426,31 @@ async def websocket_endpoint(
                         if not saw_message:
                             return
 
-                drain_task = asyncio.create_task(_drain_session())
+                relay_task = asyncio.create_task(_relay_session())
                 go_away_wait = asyncio.create_task(go_away_event.wait())
                 done, _ = await asyncio.wait(
-                    {drain_task, go_away_wait},
+                    {relay_task, go_away_wait},
                     return_when=asyncio.FIRST_COMPLETED,
                 )
-                if go_away_wait in done and drain_task not in done:
+                if go_away_wait in done and relay_task not in done:
                     open_next_task = asyncio.create_task(_open_next())
                     try:
                         await asyncio.wait_for(
-                            drain_task, timeout=go_away_secs
+                            relay_task, timeout=go_away_secs
                         )
                     except asyncio.TimeoutError:
                         logger.debug(
                             "GoAway deadline reached; reopening"
                         )
-                        drain_task.cancel()
+                        relay_task.cancel()
                         try:
-                            await drain_task
+                            await relay_task
                         except asyncio.CancelledError:
                             pass
                 else:
                     go_away_wait.cancel()
-                    if drain_task.done() and drain_task.exception():
-                        raise drain_task.exception()
+                    if relay_task.done() and relay_task.exception():
+                        raise relay_task.exception()
                 logger.debug("Live session ended; reopening")
             except WebSocketDisconnect:
                 error_cleanup = True
@@ -451,9 +458,11 @@ async def websocket_endpoint(
             except Exception:  # noqa: BLE001
                 error_cleanup = True
                 logger.warning(
-                    "Upstream session error; reopening in 1s", exc_info=True
+                    "Session error; retrying in %.1fs", retry_backoff,
+                    exc_info=True,
                 )
-                await asyncio.sleep(1)
+                await asyncio.sleep(retry_backoff)
+                retry_backoff = min(retry_backoff * 2, RETRY_BACKOFF_MAX)
             finally:
                 current_session = None
                 if conn is not None:
